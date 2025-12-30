@@ -5,17 +5,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="color-scheme" content="dark light" />
-  <title>Only Market — V2</title>
-
+  <title>Only Market - V2.1</title>
   <style>
-    /* ============================================================
-       Only Market — V2 (single-file HTML)
-       - Default theme: DARK (toggle to LIGHT)
-       - Modern gradients + glass UI
-       - Hash router: #market #sell #deals #chat #wallet #profile
-       - API wrapper with fallbacks + friendly errors
-       ============================================================ */
-
     :root{
       --r-xl: 22px; --r-lg: 18px; --r-md: 14px; --r-sm: 12px;
       --t-fast: 160ms; --t-mid: 260ms;
@@ -81,7 +72,6 @@
     .shell{ max-width: 1220px; margin: 0 auto; padding: 18px 16px 92px; }
     @media(min-width:920px){ .shell{ padding: 22px 18px 28px; } .grid{ display:grid; grid-template-columns: 290px 1fr; gap:18px; align-items:start; } }
 
-    /* Topbar */
     .topbar{ position: sticky; top:0; z-index:40; padding: 14px 0 10px; backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
     .topbar-inner{
       display:flex; align-items:center; justify-content:space-between; gap:12px;
@@ -123,7 +113,6 @@
     .icon-btn:hover{ transform: translateY(-1px); background: var(--chip2); }
     .icon-btn:active{ transform: translateY(0) scale(.99); }
 
-    /* Nav */
     .nav{ display:none; }
     @media(min-width:920px){ .nav{ display:block; position: sticky; top: 92px; } }
     .nav-card{
@@ -155,7 +144,6 @@
     .nav-label{ font-weight: 760; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .nav-hint{ font-size:12px; color: var(--txt3); flex: 0 0 auto; }
 
-    /* Bottom nav */
     .bottomnav{
       position: fixed; left:0; right:0; bottom:0;
       padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
@@ -185,7 +173,6 @@
       color: var(--txt1);
     }
 
-    /* Content card */
     .content{ min-height: 65vh; }
     .card{
       border-radius: var(--r-xl);
@@ -206,7 +193,6 @@
     .section-title h2{ margin:0; font-size: 18px; font-weight: 900; letter-spacing:.2px; }
     .section-title p{ margin:0; font-size: 12px; color: var(--txt3); }
 
-    /* Controls */
     .row{ display:flex; gap: 10px; align-items:center; flex-wrap:wrap; }
     .grid2{ display:grid; gap: 12px; }
     @media(min-width:680px){ .grid2{ grid-template-columns: 1fr 1fr; } }
@@ -253,7 +239,6 @@
     .muted{ color: var(--txt3); }
     .mono{ font-family: var(--mono); }
 
-    /* Badges */
     .badge{
       display:inline-flex; align-items:center; gap:8px;
       padding: 7px 10px; border-radius: 999px;
@@ -267,7 +252,6 @@
     .badge.err .i{ background: var(--e); }
     .badge.brand .i{ background: var(--c); }
 
-    /* Market grid */
     .hero{
       padding: 18px 16px; border-bottom: var(--border2);
       background:
@@ -332,7 +316,6 @@
     .item-meta{ display:flex; align-items:center; justify-content:space-between; gap:10px; color: var(--txt3); font-size: 12px; }
     .price{ font-weight: 950; color: var(--txt1); letter-spacing:.2px; }
 
-    /* Details */
     .details{ display:grid; gap:12px; padding: 14px; }
     @media(min-width:920px){ .details{ grid-template-columns: 1.05fr .95fr; align-items:start; } }
     .gallery{
@@ -356,13 +339,11 @@
     .sep{ height:1px; background: rgba(255,255,255,.08); }
     :root[data-theme="light"] .sep{ background: rgba(15,23,42,.08); }
 
-    /* Table */
     .table{ width:100%; border-collapse: collapse; }
     .table th, .table td{ text-align:left; padding: 12px 14px; border-bottom: var(--border2); font-size: 13px; vertical-align: top; }
     .table th{ font-size:12px; color: var(--txt3); letter-spacing:.16em; text-transform: uppercase; }
     .table tr:hover td{ background: rgba(255,255,255,.03); }
 
-    /* Chat */
     .chat{ display:grid; gap:12px; padding: 14px; }
     @media(min-width:920px){ .chat{ grid-template-columns: 340px 1fr; } }
     .chatlist, .chatbox{
@@ -392,7 +373,6 @@
     .msg .text{ font-size: 13px; line-height:1.35; white-space:pre-wrap; word-break:break-word; }
     .sendbar{ padding: 10px; border-top: var(--border2); display:grid; grid-template-columns: 1fr auto; gap: 10px; align-items:center; background: linear-gradient(180deg, transparent, rgba(255,255,255,.03)); }
 
-    /* Modal / toast */
     .overlay{ position: fixed; inset:0; background: var(--overlay); display:none; place-items:center; z-index: 90; padding: 16px; }
     .modal{
       width: min(560px, 100%); border-radius: 22px; border: var(--border);
@@ -427,7 +407,6 @@
     .toast.warn .t .i{ background: var(--w); }
     .toast .m{ color: var(--txt2); font-size: 12px; line-height: 1.35; }
 
-    /* Skeleton */
     .sk{
       border-radius: 14px;
       background: linear-gradient(90deg, rgba(255,255,255,.05), rgba(255,255,255,.12), rgba(255,255,255,.05));
@@ -449,7 +428,6 @@
 <body>
   <div class="bgfx" aria-hidden="true"></div>
 
-  <!-- Topbar -->
   <div class="topbar">
     <div class="shell">
       <div class="topbar-inner">
@@ -464,41 +442,20 @@
         <div class="top-actions">
           <div class="pill" id="healthPill" title="Статус сервера">
             <span class="dot" id="healthDot"></span>
-            <span id="healthText">Проверяем…</span>
+            <span id="healthText">Проверяем...</span>
           </div>
           <div class="pill" id="mePill" title="Профиль">
             <span class="dot" style="background: var(--c);"></span>
             <span id="meText">Гость</span>
           </div>
-          <button class="icon-btn" id="themeBtn" title="Сменить тему">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M12 3v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M12 19v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M4.22 4.22l1.42 1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M18.36 18.36l1.42 1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M3 12h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M19 12h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M4.22 19.78l1.42-1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M12 17a5 5 0 1 0 0-10a5 5 0 0 0 0 10Z" stroke="currentColor" stroke-width="2"/>
-            </svg>
-          </button>
-          <button class="icon-btn" id="debugBtn" title="Debug API">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M10 3h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M12 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M6 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M6 8v9a5 5 0 0 0 5 5h2a5 5 0 0 0 5-5V8" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-              <path d="M9 12v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M15 12v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </button>
+
+          <button class="icon-btn" id="themeBtn" title="Сменить тему">☀︎</button>
+          <button class="icon-btn" id="debugBtn" title="Debug API">⚗︎</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Main -->
   <div class="shell">
     <div class="grid">
       <aside class="nav">
@@ -568,7 +525,6 @@
     </div>
   </div>
 
-  <!-- Bottom nav -->
   <nav class="bottomnav" aria-label="Навигация">
     <div class="bottomnav-inner">
       <div class="bni" data-route="market">🛍️ Маркет</div>
@@ -593,18 +549,14 @@
   </div>
 
   <script>
-    /* ============================================================
-       V2 UI script
-       - Robust API wrapper (tries multiple endpoints if needed)
-       - Hash-router + minimal state
-       ============================================================ */
+    // V2.1 - Bullet-proof: NO template literals in JS.
 
-    const $ = (s, el=document) => el.querySelector(s);
-    const $$ = (s, el=document) => Array.from(el.querySelectorAll(s));
+    function $(s, el){ return (el || document).querySelector(s); }
+    function $$(s, el){ return Array.prototype.slice.call((el || document).querySelectorAll(s)); }
 
-    const LS = { theme: "om_theme_v2", pendingTopup: "om_pending_topup_v2" };
+    var LS = { theme: "om_theme_v21", pendingTopup: "om_pending_topup_v21" };
 
-    const state = {
+    var state = {
       route: "market",
       me: null,
       health: null,
@@ -619,247 +571,297 @@
       activeRoom: null,
       roomMessages: [],
       sse: null,
-
       market: { q:"", categoryId:"", sort:"new", vipOnly:false }
     };
 
-    // ---------- helpers ----------
-    const fmtMoney = (n) => {
-      const v = Number(n || 0);
-      if(!Number.isFinite(v)) return "0";
-      return v.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
-    };
-    const fmtTs = (ts) => {
-      if(!ts) return "";
-      const d = new Date(ts);
-      if(Number.isNaN(d.getTime())) return "";
-      return d.toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
-    };
-    const clamp = (n,a,b) => Math.max(a, Math.min(b, n));
-    const escapeHtml = (str) => String(str ?? "")
-      .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;").replaceAll("'","&#039;");
-
-    function toast(title, msg="", type="ok", ttl=3200){
-      const wrap = $("#toasts");
-      const t = document.createElement("div");
-      t.className = "toast " + (type || "ok");
-      t.innerHTML = \`
-        <div class="t"><span class="i"></span><span>\${escapeHtml(title)}</span></div>
-        \${msg ? \`<div class="m">\${escapeHtml(msg)}</div>\` : ""}
-      \`;
-      wrap.appendChild(t);
-      setTimeout(()=>{ t.style.opacity="0"; t.style.transform="translateY(-6px)"; }, ttl-240);
-      setTimeout(()=>t.remove(), ttl);
+    function escapeHtml(str){
+      return String(str == null ? "" : str)
+        .replace(/&/g,"&amp;")
+        .replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;")
+        .replace(/"/g,"&quot;")
+        .replace(/'/g,"&#039;");
     }
 
-    // ---------- Modal ----------
-    const Modal = (() => {
-      const overlay = $("#overlay");
-      const titleEl = $("#modalTitle");
-      const bodyEl = $("#modalBody");
-      const footEl = $("#modalFoot");
-      $("#modalClose").addEventListener("click", close);
-      overlay.addEventListener("click", (e)=>{ if(e.target === overlay) close(); });
+    function fmtMoney(n){
+      var v = Number(n || 0);
+      if(!isFinite(v)) return "0";
+      return v.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+    }
 
-      function open({ title="Диалог", body="", buttons=[] }){
+    function fmtTs(ts){
+      if(!ts) return "";
+      var d = new Date(ts);
+      if(isNaN(d.getTime())) return "";
+      try{
+        return d.toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" });
+      }catch(e){
+        return d.toLocaleString();
+      }
+    }
+
+    function clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }
+
+    function toast(title, msg, type, ttl){
+      if(msg == null) msg = "";
+      if(type == null) type = "ok";
+      if(ttl == null) ttl = 3200;
+
+      var wrap = $("#toasts");
+      if(!wrap) return;
+
+      var t = document.createElement("div");
+      t.className = "toast " + (type || "ok");
+
+      var html = "";
+      html += '<div class="t"><span class="i"></span><span>' + escapeHtml(title) + "</span></div>";
+      if(msg){
+        html += '<div class="m">' + escapeHtml(msg) + "</div>";
+      }
+      t.innerHTML = html;
+      wrap.appendChild(t);
+
+      setTimeout(function(){
+        t.style.opacity = "0";
+        t.style.transform = "translateY(-6px)";
+      }, Math.max(0, ttl - 240));
+
+      setTimeout(function(){ try{ t.remove(); }catch(e){} }, ttl);
+    }
+
+    // Modal
+    var Modal = (function(){
+      var overlay = $("#overlay");
+      var titleEl = $("#modalTitle");
+      var bodyEl = $("#modalBody");
+      var footEl = $("#modalFoot");
+
+      $("#modalClose").addEventListener("click", close);
+      overlay.addEventListener("click", function(e){ if(e.target === overlay) close(); });
+
+      function open(opts){
+        opts = opts || {};
+        var title = opts.title || "Диалог";
+        var body = opts.body || "";
+        var buttons = opts.buttons || [];
+
         titleEl.textContent = title;
         bodyEl.innerHTML = body;
         footEl.innerHTML = "";
-        buttons.forEach(b => {
-          const btn = document.createElement("button");
-          btn.className = b.kind === "primary" ? "btn" : (b.kind === "danger" ? "btn btn-danger" : "btn-ghost");
+
+        buttons.forEach(function(b){
+          var btn = document.createElement("button");
+          var kind = b.kind || "ghost";
+          if(kind === "primary") btn.className = "btn";
+          else if(kind === "danger") btn.className = "btn btn-danger";
+          else btn.className = "btn-ghost";
           btn.textContent = b.label || "OK";
-          btn.addEventListener("click", async ()=>{
-            try{ if(b.onClick) await b.onClick(); }
-            finally{ if(b.autoClose !== false) close(); }
+          btn.addEventListener("click", function(){
+            Promise.resolve().then(function(){
+              if(b.onClick) return b.onClick();
+            }).catch(function(){}).finally(function(){
+              if(b.autoClose !== false) close();
+            });
           });
           footEl.appendChild(btn);
         });
-        overlay.style.display="grid";
+
+        overlay.style.display = "grid";
         overlay.setAttribute("aria-hidden","false");
-        document.body.style.overflow="hidden";
+        document.body.style.overflow = "hidden";
       }
+
       function close(){
-        overlay.style.display="none";
+        overlay.style.display = "none";
         overlay.setAttribute("aria-hidden","true");
-        document.body.style.overflow="";
+        document.body.style.overflow = "";
       }
-      async function confirm({ title="Подтверждение", message="Вы уверены?", confirmLabel="Да", cancelLabel="Отмена", danger=false }){
-        return new Promise((resolve)=>{
+
+      function confirm(opts){
+        opts = opts || {};
+        var title = opts.title || "Подтверждение";
+        var message = opts.message || "Вы уверены?";
+        var confirmLabel = opts.confirmLabel || "Да";
+        var cancelLabel = opts.cancelLabel || "Отмена";
+        var danger = !!opts.danger;
+
+        return new Promise(function(resolve){
+          var bodyHtml = "<div>" + escapeHtml(message) + "</div>";
           open({
-            title,
-            body: \`<div>\${escapeHtml(message)}</div>\`,
+            title: title,
+            body: bodyHtml,
             buttons: [
-              { label: cancelLabel, kind:"ghost", onClick: ()=>resolve(false) },
-              { label: confirmLabel, kind: danger ? "danger":"primary", onClick: ()=>resolve(true) }
+              { label: cancelLabel, kind: "ghost", onClick: function(){ resolve(false); } },
+              { label: confirmLabel, kind: danger ? "danger" : "primary", onClick: function(){ resolve(true); } }
             ]
           });
         });
       }
-      return { open, close, confirm };
+
+      return { open: open, close: close, confirm: confirm };
     })();
 
-    // ---------- theme ----------
+    // Theme
     function applyTheme(theme){
-      const t = theme === "light" ? "light" : "dark";
+      var t = (theme === "light") ? "light" : "dark";
       document.documentElement.dataset.theme = t;
-      localStorage.setItem(LS.theme, t);
+      try{ localStorage.setItem(LS.theme, t); }catch(e){}
+      $("#themeBtn").textContent = (t === "dark") ? "☀︎" : "☾";
     }
+
     function initTheme(){
-      const saved = localStorage.getItem(LS.theme);
-      if(saved === "light" || saved === "dark") return applyTheme(saved);
-      // requested default: dark
-      applyTheme("dark");
+      var saved = null;
+      try{ saved = localStorage.getItem(LS.theme); }catch(e){}
+      if(saved === "light" || saved === "dark") applyTheme(saved);
+      else applyTheme("dark");
     }
 
-    // ---------- API wrapper ----------
-    async function apiFetch(path, { method="GET", body=null, headers={} } = {}){
-      const opts = { method, credentials: "include", headers: { ...headers } };
+    // API wrapper
+    function apiFetch(path, opts){
+      opts = opts || {};
+      var method = opts.method || "GET";
+      var body = (opts.body === undefined) ? null : opts.body;
+      var headers = opts.headers || {};
+
+      var fopts = { method: method, credentials: "include", headers: {} };
+      for(var k in headers){ fopts.headers[k] = headers[k]; }
       if(body !== null){
-        opts.headers["Content-Type"] = "application/json";
-        opts.body = JSON.stringify(body);
+        fopts.headers["Content-Type"] = "application/json";
+        fopts.body = JSON.stringify(body);
       }
-      let res;
-      try{
-        res = await fetch(path, opts);
-      } catch(e){
-        return { ok:false, status:0, error:"NETWORK", message: String(e?.message || "Network error") };
-      }
-      const ct = res.headers.get("content-type") || "";
-      let data = null;
-      if(ct.includes("application/json")){
-        data = await res.json().catch(()=>null);
-      } else {
-        const txt = await res.text().catch(()=> "");
-        data = txt ? { text: txt } : null;
-      }
-      if(!res.ok){
-        return { ok:false, status:res.status, ...(data||{}), error: (data && data.error) ? data.error : "HTTP_"+res.status };
-      }
-      return { ok:true, status:res.status, ...(data||{}) };
+
+      return fetch(path, fopts).then(function(res){
+        var ct = res.headers.get("content-type") || "";
+        if(ct.indexOf("application/json") >= 0){
+          return res.json().catch(function(){ return null; }).then(function(data){
+            if(!res.ok){
+              var out = data || {};
+              out.ok = false; out.status = res.status;
+              if(!out.error) out.error = "HTTP_" + res.status;
+              return out;
+            }
+            var okout = data || {};
+            okout.ok = true; okout.status = res.status;
+            return okout;
+          });
+        }
+        return res.text().catch(function(){ return ""; }).then(function(txt){
+          if(!res.ok){
+            return { ok:false, status: res.status, error: "HTTP_" + res.status, message: txt, text: txt };
+          }
+          return { ok:true, status: res.status, text: txt };
+        });
+      }).catch(function(e){
+        return { ok:false, status:0, error:"NETWORK", message: String((e && e.message) || "Network error") };
+      });
     }
 
-    async function API(pathOrPaths, opts){
-      const paths = Array.isArray(pathOrPaths) ? pathOrPaths : [pathOrPaths];
-      let last = null;
-      for(const p of paths){
-        const r = await apiFetch(p, opts);
-        last = r;
-        if(r.ok) return r;
-        // try next only on 404-ish / not found / route mismatch
-        const e = String(r.error || "");
-        if(r.status === 404 || e === "NOT_FOUND" || e.startsWith("HTTP_404")) continue;
-        // for other errors (401/500/validation) stop early
-        return r;
+    function API(paths, opts){
+      var list = Array.isArray(paths) ? paths : [paths];
+      var idx = 0;
+      function runNext(last){
+        if(idx >= list.length) return Promise.resolve(last || { ok:false, status:0, error:"NETWORK" });
+        var p = list[idx++];
+        return apiFetch(p, opts).then(function(r){
+          if(r && r.ok) return r;
+          var e = String((r && r.error) || "");
+          if((r && r.status === 404) || e === "NOT_FOUND" || e.indexOf("HTTP_404") === 0) return runNext(r);
+          return r;
+        });
       }
-      return last || { ok:false, status:0, error:"NETWORK" };
+      return runNext(null);
     }
 
     function humanErr(r){
-      const e = r?.error || "";
-      const msg = r?.message || r?.text || "";
-      const map = {
+      var e = (r && r.error) ? r.error : "";
+      var msg = (r && (r.message || r.text)) ? (r.message || r.text) : "";
+      var map = {
         UNAUTH: "Сначала войдите в аккаунт",
-        VALIDATION: "Проверьте введённые данные",
+        VALIDATION: "Проверьте введенные данные",
         EMAIL_EXISTS: "Этот email уже зарегистрирован",
         NICK_EXISTS: "Этот ник уже занят",
         FORBIDDEN: "Недостаточно прав",
         NOT_FOUND: "Не найдено",
         NO_FUNDS: "Недостаточно средств на available",
-        NETWORK: "Сервер/сеть недоступны"
+        NETWORK: "Сервер или сеть недоступны"
       };
-      return map[e] || msg || e || ("HTTP " + (r?.status || "?"));
+      return map[e] || msg || e || ("HTTP " + ((r && r.status) || "?"));
     }
 
-    // ---------- router ----------
+    // Router
     function getRouteFromHash(){
-      const h = (location.hash || "").replace("#","").trim();
+      var h = (location.hash || "").replace("#","").trim();
       return h || "market";
     }
+
     function syncNav(){
-      $$(".nav-item").forEach(el => el.classList.toggle("active", el.dataset.route === state.route));
-      $$(".bni").forEach(el => el.classList.toggle("active", el.dataset.route === state.route));
+      $$(".nav-item").forEach(function(el){
+        el.classList.toggle("active", el.dataset.route === state.route);
+      });
+      $$(".bni").forEach(function(el){
+        el.classList.toggle("active", el.dataset.route === state.route);
+      });
     }
+
     function setRoute(r){
-      const allowed = ["market","sell","deals","chat","wallet","profile"];
-      state.route = allowed.includes(r) ? r : "market";
+      var allowed = { market:1, sell:1, deals:1, chat:1, wallet:1, profile:1 };
+      state.route = allowed[r] ? r : "market";
       location.hash = "#" + state.route;
       syncNav();
       render();
       prefetchForRoute(state.route);
     }
 
-    window.addEventListener("hashchange", ()=>{
+    window.addEventListener("hashchange", function(){
       state.route = getRouteFromHash();
       syncNav();
       render();
       prefetchForRoute(state.route);
     });
 
-    // ---------- boot ----------
-    async function boot(){
-      initTheme();
-      state.route = getRouteFromHash();
-      syncNav();
-
-      $("#themeBtn").addEventListener("click", ()=> applyTheme(document.documentElement.dataset.theme === "dark" ? "light":"dark"));
-      $("#brandHome").addEventListener("click", ()=> setRoute("market"));
-      $("#mePill").addEventListener("click", ()=> setRoute("profile"));
-      $("#debugBtn").addEventListener("click", openDebug);
-
-      $$(".nav-item").forEach(el => el.addEventListener("click", ()=> setRoute(el.dataset.route)));
-      $$(".bni").forEach(el => el.addEventListener("click", ()=> setRoute(el.dataset.route)));
-
-      render(); // optimistic
-
-      await Promise.allSettled([ loadHealth(), loadMe(), loadCategories() ]);
-      await prefetchForRoute(state.route);
-
-      // small nudge if pending topup exists
-      const p = getPendingTopup();
-      if(p) toast("Ожидает платёж", "Откройте «Кошелёк» → «Проверить»", "warn", 4200);
+    // Data loaders
+    function loadHealth(){
+      return API(["/api/health","/health"]).then(function(r){
+        state.health = r.ok ? r : { ok:false };
+        var dot = $("#healthDot");
+        var txt = $("#healthText");
+        if(r.ok){
+          dot.className = "dot ok";
+          txt.textContent = "Онлайн • v" + (r.v || r.version || "?");
+        }else{
+          dot.className = "dot err";
+          txt.textContent = "Оффлайн";
+        }
+      });
     }
 
-    async function prefetchForRoute(route){
-      if(route === "market" && state.listings.length === 0) return loadListings(true);
-      if(route === "wallet") return loadWalletAll();
-      if(route === "deals") return loadOrders();
-      if(route === "chat") return loadInbox(true);
-      return;
+    function loadMe(){
+      return API(["/api/me","/me"]).then(function(r){
+        state.me = r.ok ? (r.user || r.me || r) : null;
+        $("#meText").textContent = (state.me && state.me.nickname) ? state.me.nickname : "Гость";
+        $("#navRole").textContent = (state.me && state.me.roles && state.me.roles.indexOf("admin") >= 0) ? "Admin" : (state.me ? "User" : "Guest");
+        return state.me;
+      });
     }
 
-    // ---------- loaders ----------
-    async function loadHealth(){
-      const r = await API(["/api/health","/health"]);
-      state.health = r.ok ? r : { ok:false };
-      const dot = $("#healthDot");
-      const txt = $("#healthText");
-      if(r.ok){
-        dot.className = "dot ok";
-        txt.textContent = "Онлайн • v" + (r.v || r.version || "?");
-      } else {
-        dot.className = "dot err";
-        txt.textContent = "Оффлайн";
+    function loadCategories(){
+      return API(["/api/categories","/api/cats","/categories"]).then(function(r){
+        if(r.ok){
+          if(Array.isArray(r.categories)) state.categories = r.categories;
+          else if(Array.isArray(r)) state.categories = r;
+          else state.categories = [];
+        }else{
+          state.categories = [];
+        }
+      });
+    }
+
+    function loadListings(reset){
+      if(reset){
+        state.listings = [];
+        state.listingsCursor = null;
       }
-    }
-
-    async function loadMe(){
-      const r = await API(["/api/me","/me"]);
-      state.me = r.ok ? (r.user || r.me || r) : null;
-      $("#meText").textContent = state.me?.nickname ? state.me.nickname : "Гость";
-      $("#navRole").textContent = state.me?.roles?.includes("admin") ? "Admin" : (state.me ? "User" : "Guest");
-      return state.me;
-    }
-
-    async function loadCategories(){
-      const r = await API(["/api/categories","/api/cats","/categories"]);
-      state.categories = r.ok && Array.isArray(r.categories) ? r.categories : (r.ok && Array.isArray(r) ? r : []);
-    }
-
-    async function loadListings(reset=false){
-      if(reset){ state.listings = []; state.listingsCursor = null; }
-      const q = new URLSearchParams();
+      var q = new URLSearchParams();
       if(state.market.q) q.set("q", state.market.q);
       if(state.market.categoryId) q.set("categoryId", state.market.categoryId);
       if(state.market.sort) q.set("sort", state.market.sort);
@@ -867,838 +869,794 @@
       if(state.listingsCursor) q.set("cursor", state.listingsCursor);
       q.set("limit", "24");
 
-      const r = await API([ "/api/listings?" + q.toString(), "/api/market/listings?" + q.toString() ]);
-      if(!r.ok){ toast("Маркет недоступен", humanErr(r), "err"); return; }
+      var url = "/api/listings?" + q.toString();
+      var url2 = "/api/market/listings?" + q.toString();
+      return API([url, url2]).then(function(r){
+        if(!r.ok){ toast("Маркет недоступен", humanErr(r), "err"); return; }
+        var items = [];
+        if(Array.isArray(r)) items = r;
+        else if(Array.isArray(r.items)) items = r.items;
+        else if(Array.isArray(r.listings)) items = r.listings;
 
-      const items = Array.isArray(r) ? r : (Array.isArray(r.items) ? r.items : (Array.isArray(r.listings) ? r.listings : []));
-      state.listingsCursor = r.nextCursor || r.cursor || null;
-      state.listings = reset ? items : state.listings.concat(items);
-
-      $("#navCount").textContent = state.listings.length ? String(state.listings.length) : "—";
-      if(state.route === "market") render();
+        state.listingsCursor = r.nextCursor || r.cursor || null;
+        state.listings = reset ? items : state.listings.concat(items);
+        $("#navCount").textContent = state.listings.length ? String(state.listings.length) : "—";
+        if(state.route === "market") render();
+      });
     }
 
-    async function loadListing(id){
-      const r = await API([ "/api/listings/" + encodeURIComponent(id), "/api/market/listings/" + encodeURIComponent(id) ]);
-      if(!r.ok){ toast("Не удалось открыть товар", humanErr(r), "err"); return null; }
-      state.listing = r.listing || r.item || r;
-      return state.listing;
+    function loadListing(id){
+      var u1 = "/api/listings/" + encodeURIComponent(id);
+      var u2 = "/api/market/listings/" + encodeURIComponent(id);
+      return API([u1,u2]).then(function(r){
+        if(!r.ok){ toast("Не удалось открыть товар", humanErr(r), "err"); return null; }
+        state.listing = r.listing || r.item || r;
+        return state.listing;
+      });
     }
 
-    async function loadOrders(){
-      const r = await API(["/api/orders","/api/deals"]);
-      if(!r.ok){
-        if(r.error === "UNAUTH" || r.status === 401) return;
-        toast("Сделки недоступны", humanErr(r), "err");
-        return;
-      }
-      state.orders = Array.isArray(r.orders) ? r.orders : (Array.isArray(r) ? r : []);
-      $("#navDeals").textContent = state.orders.length ? String(state.orders.length) : "—";
-      if(state.route === "deals") render();
+    function loadOrders(){
+      return API(["/api/orders","/api/deals"]).then(function(r){
+        if(!r.ok){
+          if(r.error === "UNAUTH" || r.status === 401) return;
+          toast("Сделки недоступны", humanErr(r), "err");
+          return;
+        }
+        state.orders = Array.isArray(r.orders) ? r.orders : (Array.isArray(r) ? r : []);
+        $("#navDeals").textContent = state.orders.length ? String(state.orders.length) : "—";
+        if(state.route === "deals") render();
+      });
     }
 
-    async function loadWallet(){
-      const r = await API(["/api/wallet","/api/balance"]);
-      if(!r.ok){
-        if(r.error === "UNAUTH" || r.status === 401) return;
-        toast("Кошелёк недоступен", humanErr(r), "err");
-        return;
-      }
-      state.wallet = { available: Number(r.available||0), hold: Number(r.hold||0) };
-      $("#navBal").textContent = fmtMoney(state.wallet.available);
-      return state.wallet;
+    function loadWallet(){
+      return API(["/api/wallet","/api/balance"]).then(function(r){
+        if(!r.ok){
+          if(r.error === "UNAUTH" || r.status === 401) return;
+          toast("Кошелёк недоступен", humanErr(r), "err");
+          return;
+        }
+        state.wallet = { available: Number(r.available||0), hold: Number(r.hold||0) };
+        $("#navBal").textContent = fmtMoney(state.wallet.available);
+        return state.wallet;
+      });
     }
 
-    async function loadWalletHistory(){
-      const r = await API(["/api/wallet/history","/api/wallet/tx","/api/balance/history"]);
-      if(!r.ok){ state.walletHistory = []; return; }
-      state.walletHistory = Array.isArray(r.history) ? r.history : (Array.isArray(r) ? r : (Array.isArray(r.items) ? r.items : []));
-      return state.walletHistory;
+    function loadWalletHistory(){
+      return API(["/api/wallet/history","/api/wallet/tx","/api/balance/history"]).then(function(r){
+        if(!r.ok){ state.walletHistory = []; return; }
+        if(Array.isArray(r.history)) state.walletHistory = r.history;
+        else if(Array.isArray(r)) state.walletHistory = r;
+        else if(Array.isArray(r.items)) state.walletHistory = r.items;
+        else state.walletHistory = [];
+      });
     }
 
-    async function loadWalletAll(){
-      await Promise.allSettled([loadWallet(), loadWalletHistory()]);
-      if(state.route === "wallet") render();
+    function loadWalletAll(){
+      return Promise.allSettled([loadWallet(), loadWalletHistory()]).then(function(){
+        if(state.route === "wallet") render();
+      });
     }
 
-    async function loadInbox(alsoStartSSE=false){
-      const r = await API(["/api/chat/inbox","/api/inbox"]);
-      if(!r.ok){
-        if(r.error === "UNAUTH" || r.status === 401) return;
-        toast("Чаты недоступны", humanErr(r), "err");
-        return;
-      }
-      state.inbox = Array.isArray(r.rooms) ? r.rooms : (Array.isArray(r) ? r : []);
-      $("#navChats").textContent = state.inbox.length ? String(state.inbox.length) : "—";
-      if(alsoStartSSE) startSSE();
-      if(state.route === "chat") render();
+    function loadInbox(alsoStartSSE){
+      return API(["/api/chat/inbox","/api/inbox"]).then(function(r){
+        if(!r.ok){
+          if(r.error === "UNAUTH" || r.status === 401) return;
+          toast("Чаты недоступны", humanErr(r), "err");
+          return;
+        }
+        state.inbox = Array.isArray(r.rooms) ? r.rooms : (Array.isArray(r) ? r : []);
+        $("#navChats").textContent = state.inbox.length ? String(state.inbox.length) : "—";
+        if(alsoStartSSE) startSSE();
+        if(state.route === "chat") render();
+      });
     }
 
-    async function loadRoom(roomId){
-      // try a few known variants
-      let r = await API([
-        "/api/chat/room?room=" + encodeURIComponent(roomId),
-        "/api/chat/messages?room=" + encodeURIComponent(roomId),
-        "/api/chat/messages/" + encodeURIComponent(roomId)
-      ]);
-      if(!r.ok){ toast("Не удалось открыть чат", humanErr(r), "err"); return; }
-      state.activeRoom = roomId;
-      state.roomMessages = Array.isArray(r.messages) ? r.messages : (Array.isArray(r) ? r : []);
-      if(state.route === "chat") render();
-      scrollChatToBottom();
+    function loadRoom(roomId){
+      var p1 = "/api/chat/room?room=" + encodeURIComponent(roomId);
+      var p2 = "/api/chat/messages?room=" + encodeURIComponent(roomId);
+      var p3 = "/api/chat/messages/" + encodeURIComponent(roomId);
+      return API([p1,p2,p3]).then(function(r){
+        if(!r.ok){ toast("Не удалось открыть чат", humanErr(r), "err"); return; }
+        state.activeRoom = roomId;
+        state.roomMessages = Array.isArray(r.messages) ? r.messages : (Array.isArray(r) ? r : []);
+        if(state.route === "chat") render();
+        scrollChatToBottom();
+      });
     }
 
     function startSSE(){
       if(state.sse || !state.me) return;
       try{
-        const es = new EventSource("/api/chat/stream", { withCredentials: true });
+        var es = new EventSource("/api/chat/stream", { withCredentials: true });
         state.sse = es;
-
-        es.onmessage = (ev)=>{
+        es.onmessage = function(ev){
           try{
-            const msg = JSON.parse(ev.data);
+            var msg = JSON.parse(ev.data);
             if(!msg || !msg.room || !msg.message) return;
 
-            const r = state.inbox.find(x => x.room === msg.room);
+            var r = null;
+            for(var i=0;i<state.inbox.length;i++){ if(state.inbox[i].room === msg.room){ r = state.inbox[i]; break; } }
             if(r){
               r.last = msg.message;
               r.updatedAt = Date.now();
-            } else {
+            }else{
               state.inbox.unshift({ room: msg.room, title: msg.room, last: msg.message, updatedAt: Date.now() });
             }
 
             if(state.activeRoom === msg.room){
               state.roomMessages.push(msg.message);
-              const msgs = $("#msgs");
+              var msgs = $("#msgs");
               if(msgs) msgs.innerHTML = renderMessages(state.roomMessages);
               scrollChatToBottom(true);
-            } else {
-              toast("Новое сообщение", (msg.message?.text || "").slice(0, 90), "ok", 2400);
+            }else{
+              var preview = (msg.message && (msg.message.text || msg.message.body)) ? (msg.message.text || msg.message.body) : "";
+              toast("Новое сообщение", String(preview).slice(0, 90), "ok", 2400);
               if(state.route === "chat") render();
             }
-          }catch{}
+          }catch(e){}
         };
-
-        es.onerror = ()=>{
-          try{ es.close(); }catch{}
+        es.onerror = function(){
+          try{ es.close(); }catch(e){}
           state.sse = null;
-          setTimeout(()=>{ if(state.route === "chat") startSSE(); }, 1600);
+          setTimeout(function(){ if(state.route === "chat") startSSE(); }, 1600);
         };
-      } catch(e){}
+      }catch(e){}
     }
 
-    // ---------- actions ----------
+    // Auth actions
     function requireLogin(){
       if(state.me) return true;
-      toast("Нужен вход", "Профиль → Войти", "warn");
+      toast("Нужен вход", "Профиль -> Войти", "warn");
       setRoute("profile");
       return false;
     }
 
-    async function doLogin(email, password){
-      const r = await API(["/api/auth/login","/api/login"], { method:"POST", body:{ email, password } });
-      if(!r.ok){ toast("Вход не выполнен", humanErr(r), "err"); return false; }
-      await loadMe();
-      toast("Готово", "Вы вошли", "ok");
-      return true;
+    function doLogin(email, password){
+      return API(["/api/auth/login","/api/login"], { method:"POST", body:{ email: email, password: password } }).then(function(r){
+        if(!r.ok){ toast("Вход не выполнен", humanErr(r), "err"); return false; }
+        return loadMe().then(function(){
+          toast("Готово", "Вы вошли", "ok");
+          return true;
+        });
+      });
     }
 
-    async function doRegister(email, password, nickname){
-      const r = await API(["/api/auth/register","/api/register"], { method:"POST", body:{ email, password, nickname } });
-      if(!r.ok){ toast("Регистрация не удалась", humanErr(r), "err"); return false; }
-      await loadMe();
-      toast("Готово", "Аккаунт создан", "ok");
-      return true;
+    function doRegister(email, password, nickname){
+      return API(["/api/auth/register","/api/register"], { method:"POST", body:{ email: email, password: password, nickname: nickname } }).then(function(r){
+        if(!r.ok){ toast("Регистрация не удалась", humanErr(r), "err"); return false; }
+        return loadMe().then(function(){
+          toast("Готово", "Аккаунт создан", "ok");
+          return true;
+        });
+      });
     }
 
-    async function doLogout(){
-      await API(["/api/auth/logout","/api/logout"], { method:"POST" });
-      state.me = null;
-      $("#meText").textContent = "Гость";
-      $("#navRole").textContent = "Guest";
-      toast("Выход", "Сессия завершена", "ok");
-      state.orders = []; state.wallet = null; state.walletHistory = [];
-      state.inbox = []; state.activeRoom = null; state.roomMessages = [];
-      if(state.sse){ try{ state.sse.close(); }catch{} state.sse = null; }
-      render();
+    function doLogout(){
+      return API(["/api/auth/logout","/api/logout"], { method:"POST" }).then(function(){
+        state.me = null;
+        $("#meText").textContent = "Гость";
+        $("#navRole").textContent = "Guest";
+        toast("Выход", "Сессия завершена", "ok");
+        state.orders = []; state.wallet = null; state.walletHistory = [];
+        state.inbox = []; state.activeRoom = null; state.roomMessages = [];
+        if(state.sse){ try{ state.sse.close(); }catch(e){} state.sse = null; }
+        render();
+      });
     }
 
-    async function createListingFromForm(form){
-      if(!requireLogin()) return false;
-      const title = form.title.value.trim();
-      const description = form.description.value.trim();
-      const price = Number(form.price.value || 0);
-      const categoryId = form.categoryId.value || "";
-      const delivery = form.delivery.value || "manual";
-      const stock = clamp(Number(form.stock.value || 1), 1, 9999);
+    // Market / orders
+    function createListingFromForm(form){
+      if(!requireLogin()) return Promise.resolve(false);
+
+      var title = String(form.title.value || "").trim();
+      var description = String(form.description.value || "").trim();
+      var price = Number(form.price.value || 0);
+      var categoryId = form.categoryId.value || "";
+      var delivery = form.delivery.value || "manual";
+      var stock = clamp(Number(form.stock.value || 1), 1, 9999);
 
       if(!title || !(price > 0) || !categoryId){
         toast("Проверьте поля", "Название, цена, категория обязательны", "warn");
-        return false;
+        return Promise.resolve(false);
       }
 
-      const body = { title, description, price, categoryId, delivery, stock };
-      const r = await API(["/api/listings","/api/market/listings"], { method:"POST", body });
-      if(!r.ok){ toast("Не удалось создать товар", humanErr(r), "err"); return false; }
-      toast("Готово", "Товар опубликован", "ok");
-      setRoute("market");
-      await loadListings(true);
-      return true;
-    }
-
-    async function createOrder(listingId){
-      if(!requireLogin()) return null;
-      const r = await API(["/api/orders","/api/deals"], { method:"POST", body:{ listingId } });
-      if(!r.ok){ toast("Не удалось создать сделку", humanErr(r), "err"); return null; }
-      toast("Сделка создана", "Откройте «Сделки» для оплаты", "ok");
-      await loadOrders();
-      setRoute("deals");
-      return r.order || r;
-    }
-
-    async function payOrder(orderId){
-      if(!requireLogin()) return false;
-      const r = await API([`/api/orders/${encodeURIComponent(orderId)}/pay`, `/api/deals/${encodeURIComponent(orderId)}/pay`], { method:"POST" });
-      if(!r.ok){
-        toast("Оплата не прошла", humanErr(r), "err");
-        if(r.error === "NO_FUNDS"){ setRoute("wallet"); }
-        return false;
-      }
-      toast("Оплачено", "Средства в hold (эскроу)", "ok");
-      await Promise.allSettled([loadOrders(), loadWallet()]);
-      return true;
-    }
-
-    async function sellerRequestComplete(orderId){
-      if(!requireLogin()) return false;
-      const ok = await Modal.confirm({
-        title:"Выдали товар?",
-        message:"Это переведёт сделку в delivered. Покупатель сможет завершить и выпустить средства.",
-        confirmLabel:"Да, выдал"
+      var body = { title: title, description: description, price: price, categoryId: categoryId, delivery: delivery, stock: stock };
+      return API(["/api/listings","/api/market/listings"], { method:"POST", body: body }).then(function(r){
+        if(!r.ok){ toast("Не удалось создать товар", humanErr(r), "err"); return false; }
+        toast("Готово", "Товар опубликован", "ok");
+        setRoute("market");
+        return loadListings(true).then(function(){ return true; });
       });
-      if(!ok) return false;
-      const r = await API([`/api/orders/${encodeURIComponent(orderId)}/request-complete`, `/api/deals/${encodeURIComponent(orderId)}/request-complete`], { method:"POST" });
-      if(!r.ok){ toast("Не удалось", humanErr(r), "err"); return false; }
-      toast("Ок", "Ожидаем подтверждение покупателя", "ok");
-      await loadOrders();
-      return true;
     }
 
-    async function buyerConfirm(orderId){
-      if(!requireLogin()) return false;
-      const ok = await Modal.confirm({
+    function createOrder(listingId){
+      if(!requireLogin()) return Promise.resolve(null);
+      return API(["/api/orders","/api/deals"], { method:"POST", body:{ listingId: listingId } }).then(function(r){
+        if(!r.ok){ toast("Не удалось создать сделку", humanErr(r), "err"); return null; }
+        toast("Сделка создана", "Откройте «Сделки» для оплаты", "ok");
+        return loadOrders().then(function(){ setRoute("deals"); return (r.order || r); });
+      });
+    }
+
+    function payOrder(orderId){
+      if(!requireLogin()) return Promise.resolve(false);
+      var p1 = "/api/orders/" + encodeURIComponent(orderId) + "/pay";
+      var p2 = "/api/deals/" + encodeURIComponent(orderId) + "/pay";
+      return API([p1,p2], { method:"POST" }).then(function(r){
+        if(!r.ok){
+          toast("Оплата не прошла", humanErr(r), "err");
+          if(r.error === "NO_FUNDS") setRoute("wallet");
+          return false;
+        }
+        toast("Оплачено", "Средства в hold (эскроу)", "ok");
+        return Promise.allSettled([loadOrders(), loadWallet()]).then(function(){ return true; });
+      });
+    }
+
+    function sellerRequestComplete(orderId){
+      if(!requireLogin()) return Promise.resolve(false);
+      return Modal.confirm({
+        title:"Выдали товар?",
+        message:"Это переведет сделку в delivered. Покупатель сможет завершить и выпустить средства.",
+        confirmLabel:"Да, выдал"
+      }).then(function(ok){
+        if(!ok) return false;
+        var p1 = "/api/orders/" + encodeURIComponent(orderId) + "/request-complete";
+        var p2 = "/api/deals/" + encodeURIComponent(orderId) + "/request-complete";
+        return API([p1,p2], { method:"POST" }).then(function(r){
+          if(!r.ok){ toast("Не удалось", humanErr(r), "err"); return false; }
+          toast("Ок", "Ожидаем подтверждение покупателя", "ok");
+          return loadOrders().then(function(){ return true; });
+        });
+      });
+    }
+
+    function buyerConfirm(orderId){
+      if(!requireLogin()) return Promise.resolve(false);
+      return Modal.confirm({
         title:"Завершить сделку?",
         message:"Средства выйдут из hold и зачислятся продавцу (минус комиссия).",
         confirmLabel:"Завершить"
+      }).then(function(ok){
+        if(!ok) return false;
+        var p1 = "/api/orders/" + encodeURIComponent(orderId) + "/confirm";
+        var p2 = "/api/deals/" + encodeURIComponent(orderId) + "/confirm";
+        return API([p1,p2], { method:"POST" }).then(function(r){
+          if(!r.ok){ toast("Не удалось", humanErr(r), "err"); return false; }
+          toast("Завершено", "Сделка закрыта", "ok");
+          return Promise.allSettled([loadOrders(), loadWallet()]).then(function(){ return true; });
+        });
       });
-      if(!ok) return false;
-      const r = await API([`/api/orders/${encodeURIComponent(orderId)}/confirm`, `/api/deals/${encodeURIComponent(orderId)}/confirm`], { method:"POST" });
-      if(!r.ok){ toast("Не удалось", humanErr(r), "err"); return false; }
-      toast("Завершено", "Сделка закрыта", "ok");
-      await Promise.allSettled([loadOrders(), loadWallet()]);
-      return true;
     }
 
-    async function openOrderChat(order){
-      // common room format: "order:<id>"
-      const room = order?.room || ("order:" + order.id);
+    function openOrderChat(order){
+      var room = order && (order.room || ("order:" + order.id));
       setRoute("chat");
-      await loadInbox(true);
-      await loadRoom(room);
+      return loadInbox(true).then(function(){ return loadRoom(room); });
     }
 
-    async function sendChat(text){
-      if(!requireLogin()) return;
-      if(!state.activeRoom) return;
-      const msg = String(text || "").trim();
-      if(!msg) return;
-      const r = await API(["/api/chat/send","/api/message/send"], { method:"POST", body:{ room: state.activeRoom, text: msg } });
-      if(!r.ok){ toast("Не отправлено", humanErr(r), "err"); return; }
-      // optimistic
-      const m = r.message || { id:"tmp_"+Math.random().toString(16).slice(2), userId: state.me?.id, text: msg, ts: Date.now() };
-      state.roomMessages.push(m);
-      const msgs = $("#msgs");
-      if(msgs) msgs.innerHTML = renderMessages(state.roomMessages);
-      scrollChatToBottom(true);
+    function sendChat(text){
+      if(!requireLogin()) return Promise.resolve();
+      if(!state.activeRoom) return Promise.resolve();
+      var msg = String(text || "").trim();
+      if(!msg) return Promise.resolve();
+      return API(["/api/chat/send","/api/message/send"], { method:"POST", body:{ room: state.activeRoom, text: msg } }).then(function(r){
+        if(!r.ok){ toast("Не отправлено", humanErr(r), "err"); return; }
+        var m = r.message || { id:"tmp_" + Math.random().toString(16).slice(2), userId: (state.me && state.me.id), text: msg, ts: Date.now() };
+        state.roomMessages.push(m);
+        var msgs = $("#msgs");
+        if(msgs) msgs.innerHTML = renderMessages(state.roomMessages);
+        scrollChatToBottom(true);
+      });
     }
 
-    async function walletDepositRequest(amount){
-      if(!requireLogin()) return false;
-      const r = await API(["/api/wallet/deposit-request","/api/deposit-request"], { method:"POST", body:{ amount: Number(amount) } });
-      if(!r.ok){ toast("Не удалось", humanErr(r), "err"); return false; }
-      toast("Заявка создана", "Менеджер обработает пополнение", "ok");
-      return true;
-    }
-    async function walletWithdrawRequest(amount){
-      if(!requireLogin()) return false;
-      const r = await API(["/api/wallet/withdraw-request","/api/withdraw-request"], { method:"POST", body:{ amount: Number(amount) } });
-      if(!r.ok){ toast("Не удалось", humanErr(r), "err"); return false; }
-      toast("Заявка создана", "Вывод поставлен в очередь", "ok");
-      return true;
-    }
-
-    // payment providers (optional)
-    async function payCreate(provider, amount){
-      if(!requireLogin()) return null;
-
-      const map = {
-        rukassa: { create: ["/api/pay/rukassa/create","/api/pay/fk/create","/api/fk/create"], status: ["/api/pay/rukassa/status","/api/pay/fk/status","/api/fk/status"], key: "invoiceId", urlKey: "payUrl" },
-        paradise:{ create: ["/api/pay/paradise/create"], status: ["/api/pay/paradise/status"], key: "uuid", urlKey: "redirect_url" },
-        cryptobot:{ create: ["/api/pay/cryptobot/create"], status: ["/api/pay/cryptobot/status"], key: "invoiceId", urlKey: "pay_url" },
-        stripe:{ create: ["/api/pay/stripe/create"], status: ["/api/pay/stripe/status"], key: "sessionId", urlKey: "url" },
-      };
-
-      const cfg = map[provider];
-      if(!cfg) return null;
-
-      const r = await API(cfg.create, { method:"POST", body:{ amount: Number(amount), currency:"RUB" } });
-      if(!r.ok){ toast("Провайдер недоступен", humanErr(r), "err"); return null; }
-
-      // normalize
-      const id = r[cfg.key] || r.id || r.invoiceId || r.uuid;
-      const url = r[cfg.urlKey] || r.payUrl || r.url || r.redirect_url || r.pay_url;
-      if(id && url){
-        localStorage.setItem(LS.pendingTopup, JSON.stringify({ provider, id, url, createdAt: Date.now(), expiresAt: Date.now()+12*60*60*1000 }));
-        window.open(url, "_blank", "noopener");
-        toast("Счёт открыт", "После оплаты нажмите «Проверить»", "ok", 4200);
-      } else {
-        toast("Создано", "Но не получили ссылку оплаты. Проверь ответ в Debug.", "warn", 5200);
-      }
-      return { id, url, raw: r };
-    }
-
-    async function payCheckPending(){
-      if(!requireLogin()) return null;
-      const p = getPendingTopup();
-      if(!p) return toast("Нет ожидания", "Создайте счёт на оплату", "warn");
-
-      // provider-specific status call
-      if(p.provider === "rukassa"){
-        const r = await API("/api/pay/rukassa/status?invoiceId=" + encodeURIComponent(p.id));
-        return handlePayStatus(r, p);
-      }
-      if(p.provider === "paradise"){
-        const r = await API("/api/pay/paradise/status/" + encodeURIComponent(p.id));
-        return handlePayStatus(r, p);
-      }
-      if(p.provider === "cryptobot"){
-        const r = await API("/api/pay/cryptobot/status?invoiceId=" + encodeURIComponent(p.id));
-        return handlePayStatus(r, p);
-      }
-      if(p.provider === "stripe"){
-        const r = await API("/api/pay/stripe/status?sessionId=" + encodeURIComponent(p.id));
-        return handlePayStatus(r, p);
-      }
-      toast("Неизвестный провайдер", p.provider, "err");
-      return null;
-    }
-
-    async function handlePayStatus(r, p){
-      if(!r.ok){ toast("Статус недоступен", humanErr(r), "err"); return null; }
-      const st = r.status || r.state || r.payment_status || r.result;
-      if(String(st).toLowerCase() === "paid" || String(st).toLowerCase() === "success"){
-        toast("Оплата подтверждена", "Баланс пополнен", "ok");
-        localStorage.removeItem(LS.pendingTopup);
-        await loadWalletAll();
-        return r;
-      }
-      toast("Пока не оплачено", "Если только что оплатили — попробуйте через 10–20 секунд", "warn", 4200);
-      return r;
-    }
-
+    // Wallet: pending
     function getPendingTopup(){
       try{
-        const p = JSON.parse(localStorage.getItem(LS.pendingTopup) || "null");
+        var p = JSON.parse(localStorage.getItem(LS.pendingTopup) || "null");
         if(!p) return null;
         if(Date.now() > (p.expiresAt || 0)) return null;
         return p;
-      } catch { return null; }
+      }catch(e){ return null; }
     }
 
-    // ---------- render ----------
-    function render(){
-      const app = $("#app");
-      if(!app) return;
+    function setPendingTopup(p){
+      try{ localStorage.setItem(LS.pendingTopup, JSON.stringify(p)); }catch(e){}
+    }
 
+    function clearPendingTopup(){
+      try{ localStorage.removeItem(LS.pendingTopup); }catch(e){}
+    }
+
+    function payCreate(provider, amount){
+      if(!requireLogin()) return Promise.resolve(null);
+
+      var cfg = null;
+      if(provider === "rukassa"){
+        cfg = { create: ["/api/pay/rukassa/create","/api/pay/fk/create","/api/fk/create"], key:"invoiceId", urlKey:"payUrl" };
+      }else if(provider === "paradise"){
+        cfg = { create: ["/api/pay/paradise/create"], key:"uuid", urlKey:"redirect_url" };
+      }else if(provider === "cryptobot"){
+        cfg = { create: ["/api/pay/cryptobot/create"], key:"invoiceId", urlKey:"pay_url" };
+      }else if(provider === "stripe"){
+        cfg = { create: ["/api/pay/stripe/create"], key:"sessionId", urlKey:"url" };
+      }else{
+        return Promise.resolve(null);
+      }
+
+      return API(cfg.create, { method:"POST", body:{ amount: Number(amount), currency:"RUB" } }).then(function(r){
+        if(!r.ok){ toast("Провайдер недоступен", humanErr(r), "err"); return null; }
+        var id = r[cfg.key] || r.id || r.invoiceId || r.uuid;
+        var url = r[cfg.urlKey] || r.payUrl || r.url || r.redirect_url || r.pay_url;
+
+        if(id && url){
+          setPendingTopup({ provider: provider, id: id, url: url, createdAt: Date.now(), expiresAt: Date.now() + 12*60*60*1000 });
+          try{ window.open(url, "_blank", "noopener"); }catch(e){}
+          toast("Счет открыт", "После оплаты нажмите «Проверить»", "ok", 4200);
+        }else{
+          toast("Создано", "Но не получили ссылку оплаты. Проверьте ответ в Debug.", "warn", 5200);
+        }
+        return { id: id, url: url, raw: r };
+      });
+    }
+
+    function payCheckPending(){
+      if(!requireLogin()) return Promise.resolve(null);
+      var p = getPendingTopup();
+      if(!p){ toast("Нет ожидания", "Создайте счет на оплату", "warn"); return Promise.resolve(null); }
+
+      if(p.provider === "rukassa"){
+        return API("/api/pay/rukassa/status?invoiceId=" + encodeURIComponent(p.id)).then(function(r){ return handlePayStatus(r, p); });
+      }
+      if(p.provider === "paradise"){
+        return API("/api/pay/paradise/status/" + encodeURIComponent(p.id)).then(function(r){ return handlePayStatus(r, p); });
+      }
+      if(p.provider === "cryptobot"){
+        return API("/api/pay/cryptobot/status?invoiceId=" + encodeURIComponent(p.id)).then(function(r){ return handlePayStatus(r, p); });
+      }
+      if(p.provider === "stripe"){
+        return API("/api/pay/stripe/status?sessionId=" + encodeURIComponent(p.id)).then(function(r){ return handlePayStatus(r, p); });
+      }
+      toast("Неизвестный провайдер", p.provider, "err");
+      return Promise.resolve(null);
+    }
+
+    function handlePayStatus(r, p){
+      if(!r.ok){ toast("Статус недоступен", humanErr(r), "err"); return null; }
+      var st = r.status || r.state || r.payment_status || r.result || "";
+      var s = String(st).toLowerCase();
+      if(s === "paid" || s === "success"){
+        toast("Оплата подтверждена", "Баланс пополнен", "ok");
+        clearPendingTopup();
+        return loadWalletAll().then(function(){ return r; });
+      }
+      toast("Пока не оплачено", "Если только что оплатили - попробуйте через 10-20 секунд", "warn", 4200);
+      return r;
+    }
+
+    function walletDepositRequest(amount){
+      if(!requireLogin()) return Promise.resolve(false);
+      return API(["/api/wallet/deposit-request","/api/deposit-request"], { method:"POST", body:{ amount: Number(amount) } }).then(function(r){
+        if(!r.ok){ toast("Не удалось", humanErr(r), "err"); return false; }
+        toast("Заявка создана", "Менеджер обработает пополнение", "ok");
+        return true;
+      });
+    }
+
+    function walletWithdrawRequest(amount){
+      if(!requireLogin()) return Promise.resolve(false);
+      return API(["/api/wallet/withdraw-request","/api/withdraw-request"], { method:"POST", body:{ amount: Number(amount) } }).then(function(r){
+        if(!r.ok){ toast("Не удалось", humanErr(r), "err"); return false; }
+        toast("Заявка создана", "Вывод поставлен в очередь", "ok");
+        return true;
+      });
+    }
+
+    // Render helpers
+    function setApp(html){
+      var app = $("#app");
+      if(app) app.innerHTML = html;
+    }
+
+    function skeletonGrid(){
+      var out = [];
+      for(var i=0;i<8;i++){
+        out.push('<div class="item" style="cursor: default;">' +
+          '<div class="thumb sk"></div>' +
+          '<div class="item-body">' +
+          '<div class="sk" style="height:14px;border-radius:10px;"></div>' +
+          '<div class="row" style="justify-content: space-between;">' +
+          '<div class="sk" style="height:12px;width:88px;border-radius:10px;"></div>' +
+          '<div class="sk" style="height:12px;width:64px;border-radius:10px;"></div>' +
+          "</div></div></div>");
+      }
+      return out.join("");
+    }
+
+    function render(){
       if(state.route === "market") return renderMarket();
       if(state.route === "sell") return renderSell();
       if(state.route === "deals") return renderDeals();
       if(state.route === "chat") return renderChat();
       if(state.route === "wallet") return renderWallet();
       if(state.route === "profile") return renderProfile();
-
-      app.innerHTML = \`<div class="section-title"><h2>404</h2><p>Страница не найдена</p></div><div class="card-pad">—</div>\`;
+      setApp('<div class="section-title"><h2>404</h2><p>Страница не найдена</p></div><div class="card-pad">—</div>');
     }
 
-    // ----- Market -----
     function renderMarket(){
-      const app = $("#app");
+      var catOpts = ['<option value="">Все категории</option>'];
+      for(var i=0;i<state.categories.length;i++){
+        var c = state.categories[i];
+        catOpts.push('<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.title || c.name || c.id) + "</option>");
+      }
 
-      const catOptions = ["<option value=''>Все категории</option>"].concat(
-        (state.categories || []).map(c => \`<option value="\${escapeHtml(c.id)}">\${escapeHtml(c.title || c.name || c.id)}</option>\`)
-      ).join("");
-
-      const chips = [
+      var chips = [
         { id:"new", label:"Сначала новые" },
         { id:"cheap", label:"Дешевле" },
         { id:"exp", label:"Дороже" },
-        { id:"vip", label:"VIP" },
+        { id:"vip", label:"VIP" }
       ];
 
-      const cards = (state.listings || []).map(l => {
-        const img = l.photoId ? ("/media/" + encodeURIComponent(l.photoId)) : "";
-        const vip = !!l.vipUntil && (Number(l.vipUntil) > Date.now());
-        return \`
-          <div class="item" data-id="\${escapeHtml(l.id)}" role="button" tabindex="0">
-            <div class="thumb">
-              \${img ? \`<img src="\${escapeHtml(img)}" alt="">\` : ""}
-              \${vip ? \`<div class="vip"><span class="star"></span>VIP</div>\` : ""}
-            </div>
-            <div class="item-body">
-              <div class="item-title">\${escapeHtml(l.title || "Без названия")}</div>
-              <div class="item-meta">
-                <div class="price">\${fmtMoney(l.price)} ₽</div>
-                <div>\${escapeHtml(String(l.categoryTitle || l.category || "").slice(0,16))}</div>
-              </div>
-            </div>
-          </div>
-        \`;
-      }).join("") || \`
-        <div style="padding:16px;">
-          <span class="badge warn"><span class="i"></span><strong>Пусто</strong></span>
-          <div style="height:10px;"></div>
-          <div class="hint">Попробуйте изменить поиск/категорию. Или создайте первый товар.</div>
-        </div>
-      \`;
+      var cards = [];
+      for(var j=0;j<state.listings.length;j++){
+        var l = state.listings[j];
+        var img = l.photoId ? ("/media/" + encodeURIComponent(l.photoId)) : "";
+        var vip = !!l.vipUntil && (Number(l.vipUntil) > Date.now());
 
-      app.innerHTML = \`
-        <div class="hero">
-          <h3>Маркет</h3>
-          <p>Современный интерфейс: быстрый поиск, эскроу-сделки, чаты и кошелёк.</p>
-        </div>
+        cards.push('<div class="item" data-id="' + escapeHtml(l.id) + '" role="button" tabindex="0">' +
+          '<div class="thumb">' +
+          (img ? '<img src="' + escapeHtml(img) + '" alt="">' : "") +
+          (vip ? '<div class="vip"><span class="star"></span>VIP</div>' : "") +
+          "</div>" +
+          '<div class="item-body">' +
+          '<div class="item-title">' + escapeHtml(l.title || "Без названия") + "</div>" +
+          '<div class="item-meta">' +
+          '<div class="price">' + fmtMoney(l.price) + " ₽</div>" +
+          "<div>" + escapeHtml(String(l.categoryTitle || l.category || "").slice(0,16)) + "</div>" +
+          "</div></div></div>");
+      }
+      var gridHtml = (state.listings.length ? cards.join("") : skeletonGrid());
 
-        <div class="toolbar">
-          <input class="field" id="m_q" placeholder="Поиск: аккаунт, услуга, подписка…" value="\${escapeHtml(state.market.q)}">
-          <select class="field" id="m_cat">\${catOptions}</select>
-          <div class="chips" id="m_chips">
-            \${chips.map(x => \`<div class="chip \${(state.market.vipOnly && x.id==="vip") || (!state.market.vipOnly && state.market.sort===x.id) ? "active":""}" data-sort="\${x.id}">\${escapeHtml(x.label)}</div>\`).join("")}
-          </div>
-          <button class="btn" id="m_reload">Обновить</button>
-        </div>
+      var chipHtml = [];
+      for(var k=0;k<chips.length;k++){
+        var x = chips[k];
+        var active = (state.market.vipOnly && x.id === "vip") || (!state.market.vipOnly && state.market.sort === x.id);
+        chipHtml.push('<div class="chip ' + (active ? "active" : "") + '" data-sort="' + x.id + '">' + escapeHtml(x.label) + "</div>");
+      }
 
-        <div class="listgrid" id="m_grid">\${state.listings.length ? cards : skeletonGrid()}</div>
+      var html = "";
+      html += '<div class="hero"><h3>Маркет</h3><p>Быстрый поиск, сделки с эскроу, чаты и кошелек.</p></div>';
+      html += '<div class="toolbar">';
+      html += '<input class="field" id="m_q" placeholder="Поиск: аккаунт, услуга, подписка..." value="' + escapeHtml(state.market.q) + '">';
+      html += '<select class="field" id="m_cat">' + catOpts.join("") + "</select>";
+      html += '<div class="chips" id="m_chips">' + chipHtml.join("") + "</div>";
+      html += '<button class="btn" id="m_reload">Обновить</button>';
+      html += "</div>";
+      html += '<div class="listgrid" id="m_grid">' + gridHtml + "</div>";
+      html += '<div class="card-pad" style="border-top: var(--border2); display:flex; gap:10px; justify-content: space-between; align-items:center; flex-wrap: wrap;">';
+      html += '<div class="hint">Показано: <b>' + state.listings.length + "</b>" + (state.listingsCursor ? " • есть еще" : "") + "</div>";
+      html += '<div class="row">';
+      html += '<button class="btn-ghost" id="m_more" ' + (state.listingsCursor ? "" : "disabled") + ">Показать еще</button>";
+      html += '<button class="btn" id="m_sell">Добавить товар</button>';
+      html += "</div></div>";
 
-        <div class="card-pad" style="border-top: var(--border2); display:flex; gap:10px; justify-content: space-between; align-items:center; flex-wrap: wrap;">
-          <div class="hint">Показано: <b>\${state.listings.length}</b>\${state.listingsCursor ? " • есть ещё" : ""}</div>
-          <div class="row">
-            <button class="btn-ghost" id="m_more" \${state.listingsCursor ? "" : "disabled"}>Показать ещё</button>
-            <button class="btn" id="m_sell">Добавить товар</button>
-          </div>
-        </div>
-      \`;
+      setApp(html);
 
       $("#m_cat").value = state.market.categoryId || "";
-      $("#m_cat").addEventListener("change", async (e)=>{ state.market.categoryId = e.target.value; await loadListings(true); });
+      $("#m_cat").addEventListener("change", function(e){
+        state.market.categoryId = e.target.value;
+        loadListings(true);
+      });
 
-      const q = $("#m_q");
-      let qt = null;
-      q.addEventListener("input", ()=>{
-        clearTimeout(qt);
-        qt = setTimeout(async ()=>{
+      var q = $("#m_q");
+      var qt = null;
+      q.addEventListener("input", function(){
+        if(qt) clearTimeout(qt);
+        qt = setTimeout(function(){
           state.market.q = q.value.trim();
-          await loadListings(true);
+          loadListings(true);
         }, 320);
       });
 
-      $$("#m_chips .chip").forEach(el => el.addEventListener("click", async ()=>{
-        const sort = el.dataset.sort;
-        state.market.vipOnly = (sort === "vip");
-        if(!state.market.vipOnly) state.market.sort = sort;
-        await loadListings(true);
-        render();
-      }));
+      $$("#m_chips .chip").forEach(function(el){
+        el.addEventListener("click", function(){
+          var sort = el.dataset.sort;
+          state.market.vipOnly = (sort === "vip");
+          if(!state.market.vipOnly) state.market.sort = sort;
+          loadListings(true).then(function(){ render(); });
+        });
+      });
 
-      $("#m_reload").addEventListener("click", ()=> loadListings(true));
-      $("#m_more").addEventListener("click", ()=> loadListings(false));
-      $("#m_sell").addEventListener("click", ()=> setRoute("sell"));
+      $("#m_reload").addEventListener("click", function(){ loadListings(true); });
+      $("#m_more").addEventListener("click", function(){ loadListings(false); });
+      $("#m_sell").addEventListener("click", function(){ setRoute("sell"); });
 
-      $$("#m_grid .item").forEach(el => {
-        const id = el.dataset.id;
-        el.addEventListener("click", ()=> openListing(id));
-        el.addEventListener("keydown", (e)=>{ if(e.key==="Enter") openListing(id); });
+      $$("#m_grid .item").forEach(function(el){
+        var id = el.dataset.id;
+        el.addEventListener("click", function(){ openListing(id); });
+        el.addEventListener("keydown", function(e){ if(e.key === "Enter") openListing(id); });
       });
 
       if(state.listings.length === 0) loadListings(true);
     }
 
-    function skeletonGrid(){
-      return Array.from({length: 8}).map(()=>\`
-        <div class="item" style="cursor: default;">
-          <div class="thumb sk"></div>
-          <div class="item-body">
-            <div class="sk" style="height:14px;border-radius:10px;"></div>
-            <div class="row" style="justify-content: space-between;">
-              <div class="sk" style="height:12px;width:88px;border-radius:10px;"></div>
-              <div class="sk" style="height:12px;width:64px;border-radius:10px;"></div>
-            </div>
-          </div>
-        </div>\`).join("");
-    }
-
-    async function openListing(id){
-      await loadListing(id);
-      renderListingDetails();
+    function openListing(id){
+      return loadListing(id).then(function(){ renderListingDetails(); });
     }
 
     function renderListingDetails(){
-      const app = $("#app");
-      const l = state.listing;
+      var l = state.listing;
       if(!l){
-        app.innerHTML = \`<div class="section-title"><h2>Товар</h2><p>Не найден</p></div><div class="card-pad">—</div>\`;
+        setApp('<div class="section-title"><h2>Товар</h2><p>Не найден</p></div><div class="card-pad">—</div>');
         return;
       }
-      const img = l.photoId ? ("/media/" + encodeURIComponent(l.photoId)) : "";
-      const delivery = l.delivery || "manual";
-      const vip = !!l.vipUntil && (Number(l.vipUntil) > Date.now());
 
-      app.innerHTML = \`
-        <div class="section-title">
-          <div><h2>Товар</h2><p>Подробности и покупка</p></div>
-          <div class="row">
-            <button class="btn-ghost" id="d_back">← Назад</button>
-            <button class="btn" id="d_buy">Купить</button>
-          </div>
-        </div>
+      var img = l.photoId ? ("/media/" + encodeURIComponent(l.photoId)) : "";
+      var delivery = l.delivery || "manual";
+      var vip = !!l.vipUntil && (Number(l.vipUntil) > Date.now());
 
-        <div class="details">
-          <div class="gallery">
-            \${img ? \`<img src="\${escapeHtml(img)}" alt="">\` : \`<div class="hint">Нет изображения</div>\`}
-            \${vip ? \`<div class="vip" style="top:12px;left:12px;"><span class="star"></span>VIP</div>\` : ""}
-          </div>
+      var html = "";
+      html += '<div class="section-title">';
+      html += '<div><h2>Товар</h2><p>Подробности и покупка</p></div>';
+      html += '<div class="row"><button class="btn-ghost" id="d_back">← Назад</button><button class="btn" id="d_buy">Купить</button></div>';
+      html += "</div>";
 
-          <div class="details-card">
-            <div class="details-head">
-              <h3>\${escapeHtml(l.title || "Без названия")}</h3>
-              <div class="subline">
-                <span class="badge brand"><span class="i"></span><strong>\${fmtMoney(l.price)} ₽</strong></span>
-                <span class="badge \${delivery==="auto" ? "ok":"warn"}"><span class="i"></span><strong>\${escapeHtml(delivery.toUpperCase())}</strong>&nbsp;<span class="muted">delivery</span></span>
-              </div>
-            </div>
-            <div class="details-body">
-              <div class="kv">
-                <div class="k"><div class="t">Категория</div><div class="v">\${escapeHtml(l.categoryTitle || l.categoryId || "—")}</div></div>
-                <div class="k"><div class="t">Остаток</div><div class="v">\${escapeHtml(String(l.stock ?? "—"))}</div></div>
-              </div>
+      html += '<div class="details">';
+      html += '<div class="gallery">';
+      html += img ? '<img src="' + escapeHtml(img) + '" alt="">' : '<div class="hint">Нет изображения</div>';
+      html += vip ? '<div class="vip" style="top:12px;left:12px;"><span class="star"></span>VIP</div>' : "";
+      html += "</div>";
 
-              <div class="sep"></div>
+      html += '<div class="details-card">';
+      html += '<div class="details-head">';
+      html += "<h3>" + escapeHtml(l.title || "Без названия") + "</h3>";
+      html += '<div class="subline">';
+      html += '<span class="badge brand"><span class="i"></span><strong>' + fmtMoney(l.price) + " ₽</strong></span>";
+      html += '<span class="badge ' + (delivery === "auto" ? "ok" : "warn") + '"><span class="i"></span><strong>' + escapeHtml(String(delivery).toUpperCase()) + '</strong>&nbsp;<span class="muted">delivery</span></span>';
+      html += "</div></div>";
 
-              <div>
-                <div class="hint" style="margin-bottom:6px;">Описание</div>
-                <div style="white-space: pre-wrap; line-height: 1.45;">\${escapeHtml(l.description || "—")}</div>
-              </div>
+      html += '<div class="details-body">';
+      html += '<div class="kv">';
+      html += '<div class="k"><div class="t">Категория</div><div class="v">' + escapeHtml(l.categoryTitle || l.categoryId || "—") + "</div></div>";
+      html += '<div class="k"><div class="t">Остаток</div><div class="v">' + escapeHtml(String(l.stock == null ? "—" : l.stock)) + "</div></div>";
+      html += "</div>";
 
-              <div class="sep"></div>
+      html += '<div class="sep"></div>';
+      html += '<div><div class="hint" style="margin-bottom:6px;">Описание</div><div style="white-space: pre-wrap; line-height: 1.45;">' + escapeHtml(l.description || "—") + "</div></div>";
+      html += '<div class="sep"></div>';
+      html += '<div class="row" style="justify-content: space-between;">';
+      html += '<div class="hint">Создано: <b>' + escapeHtml(fmtTs(l.createdAt)) + "</b></div>";
+      html += '<div class="row"><button class="btn-ghost" id="d_chat">Чат</button><button class="btn" id="d_buy2">Купить сейчас</button></div>';
+      html += "</div>";
 
-              <div class="row" style="justify-content: space-between;">
-                <div class="hint">Создано: <b>\${escapeHtml(fmtTs(l.createdAt))}</b></div>
-                <div class="row">
-                  <button class="btn-ghost" id="d_chat">Чат</button>
-                  <button class="btn" id="d_buy2">Купить сейчас</button>
-                </div>
-              </div>
+      html += '<div class="hint">После покупки создастся сделка. Оплата переводит сумму в <b>hold</b> (эскроу). После подтверждения деньги уйдут продавцу.</div>';
+      html += "</div></div></div>";
 
-              <div class="hint">
-                После покупки создастся сделка. Оплата переводит сумму в <b>hold</b> (эскроу). После подтверждения — деньги уйдут продавцу.
-              </div>
-            </div>
-          </div>
-        </div>\`;
+      setApp(html);
 
-      $("#d_back").addEventListener("click", ()=>{ state.listing=null; renderMarket(); });
-      $("#d_buy").addEventListener("click", ()=> createOrder(l.id));
-      $("#d_buy2").addEventListener("click", ()=> createOrder(l.id));
+      $("#d_back").addEventListener("click", function(){ state.listing = null; setRoute("market"); });
+      $("#d_buy").addEventListener("click", function(){ createOrder(l.id); });
+      $("#d_buy2").addEventListener("click", function(){ createOrder(l.id); });
 
-      $("#d_chat").addEventListener("click", async ()=>{
+      $("#d_chat").addEventListener("click", function(){
         if(!requireLogin()) return;
-        await loadOrders();
-        const ord = state.orders.find(o => o.listingId === l.id && (o.buyerId === state.me.id || o.sellerId === state.me.id));
-        if(ord) return openOrderChat(ord);
-        toast("Чат в сделке", "Чат создаётся в сделке. Создайте сделку (Купить).", "warn", 4200);
+        loadOrders().then(function(){
+          var ord = null;
+          for(var i=0;i<state.orders.length;i++){
+            var o = state.orders[i];
+            if(o.listingId === l.id && state.me && (o.buyerId === state.me.id || o.sellerId === state.me.id)){ ord = o; break; }
+          }
+          if(ord) return openOrderChat(ord);
+          toast("Чат в сделке", "Чат создается в сделке. Нажмите «Купить».", "warn", 4200);
+        });
       });
     }
 
-    // ----- Sell -----
     function renderSell(){
-      const app = $("#app");
-      const catOptions = ["<option value=''>Выберите категорию</option>"].concat(
-        (state.categories || []).map(c => \`<option value="\${escapeHtml(c.id)}">\${escapeHtml(c.title || c.name || c.id)}</option>\`)
-      ).join("");
+      var catOpts = ['<option value="">Выберите категорию</option>'];
+      for(var i=0;i<state.categories.length;i++){
+        var c = state.categories[i];
+        catOpts.push('<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.title || c.name || c.id) + "</option>");
+      }
 
-      app.innerHTML = \`
-        <div class="section-title">
-          <div><h2>Продать</h2><p>Создание товара</p></div>
-          <div class="row">
-            <button class="btn-ghost" id="s_toMarket">← Маркет</button>
-            <button class="btn" id="s_publish">Опубликовать</button>
-          </div>
-        </div>
+      var html = "";
+      html += '<div class="section-title">';
+      html += '<div><h2>Продать</h2><p>Создание товара</p></div>';
+      html += '<div class="row"><button class="btn-ghost" id="s_toMarket">← Маркет</button><button class="btn" id="s_publish">Опубликовать</button></div>';
+      html += "</div>";
 
-        <div class="card-pad">
-          \${state.me ? "" : \`<span class="badge warn"><span class="i"></span><strong>Вы не вошли</strong>&nbsp;<span class="muted">— публикация потребует входа</span></span><div style="height:12px;"></div>\`}
+      html += '<div class="card-pad">';
+      if(!state.me){
+        html += '<span class="badge warn"><span class="i"></span><strong>Вы не вошли</strong>&nbsp;<span class="muted">— публикация потребует входа</span></span><div style="height:12px;"></div>';
+      }
 
-          <form id="sellForm" class="grid2" autocomplete="off">
-            <div>
-              <div class="hint" style="margin-bottom:6px;">Название</div>
-              <input class="field" name="title" placeholder="Например: Netflix Premium 1 month" maxlength="80" required>
-            </div>
-            <div>
-              <div class="hint" style="margin-bottom:6px;">Цена (₽)</div>
-              <input class="field" name="price" type="number" min="1" step="1" placeholder="499" required>
-            </div>
+      html += '<form id="sellForm" class="grid2" autocomplete="off">';
+      html += '<div><div class="hint" style="margin-bottom:6px;">Название</div><input class="field" name="title" placeholder="Например: Netflix Premium 1 month" maxlength="80" required></div>';
+      html += '<div><div class="hint" style="margin-bottom:6px;">Цена (₽)</div><input class="field" name="price" type="number" min="1" step="1" placeholder="499" required></div>';
+      html += '<div><div class="hint" style="margin-bottom:6px;">Категория</div><select class="field" name="categoryId" required>' + catOpts.join("") + "</select></div>";
+      html += '<div><div class="hint" style="margin-bottom:6px;">Delivery</div><select class="field" name="delivery"><option value="manual">manual - выдача вручную</option><option value="auto">auto - автоматическая выдача</option></select></div>';
+      html += '<div><div class="hint" style="margin-bottom:6px;">Остаток (stock)</div><input class="field" name="stock" type="number" min="1" step="1" value="1"></div>';
+      html += '<div style="grid-column: 1 / -1;"><div class="hint" style="margin-bottom:6px;">Описание</div><textarea class="field" name="description" placeholder="Что именно продаете, сроки, условия, как выдаете..."></textarea><div class="hint" style="margin-top:8px;">Совет: короткий заголовок + четкое описание -> выше конверсия.</div></div>';
+      html += '<div style="grid-column: 1 / -1;"><div class="row" style="justify-content: flex-end;"><button type="button" class="btn" id="s_publish2">Опубликовать</button></div></div>';
+      html += "</form></div>";
 
-            <div>
-              <div class="hint" style="margin-bottom:6px;">Категория</div>
-              <select class="field" name="categoryId" required>\${catOptions}</select>
-            </div>
+      setApp(html);
 
-            <div>
-              <div class="hint" style="margin-bottom:6px;">Delivery</div>
-              <select class="field" name="delivery">
-                <option value="manual">manual — выдача вручную</option>
-                <option value="auto">auto — автоматическая выдача</option>
-              </select>
-            </div>
-
-            <div>
-              <div class="hint" style="margin-bottom:6px;">Остаток (stock)</div>
-              <input class="field" name="stock" type="number" min="1" step="1" value="1">
-            </div>
-
-            <div style="grid-column: 1 / -1;">
-              <div class="hint" style="margin-bottom:6px;">Описание</div>
-              <textarea class="field" name="description" placeholder="Что именно продаёте, сроки, условия, как выдаёте…"></textarea>
-              <div class="hint" style="margin-top:8px;">Совет: короткий заголовок + чёткое описание → выше конверсия.</div>
-            </div>
-
-            <div style="grid-column: 1 / -1;">
-              <div class="row" style="justify-content: flex-end;">
-                <button type="button" class="btn" id="s_publish2">Опубликовать</button>
-              </div>
-            </div>
-          </form>
-        </div>\`;
-
-      $("#s_toMarket").addEventListener("click", ()=> setRoute("market"));
-      const form = $("#sellForm");
-      const publish = ()=> createListingFromForm(form);
+      $("#s_toMarket").addEventListener("click", function(){ setRoute("market"); });
+      var form = $("#sellForm");
+      function publish(){ createListingFromForm(form); }
       $("#s_publish").addEventListener("click", publish);
       $("#s_publish2").addEventListener("click", publish);
     }
 
-    // ----- Deals -----
     function statusBadge(st){
-      const s = String(st || "pending");
-      if(s === "pending") return \`<span class="badge warn"><span class="i"></span><strong>pending</strong></span>\`;
-      if(s === "paid") return \`<span class="badge brand"><span class="i"></span><strong>paid</strong></span>\`;
-      if(s === "delivered") return \`<span class="badge brand"><span class="i"></span><strong>delivered</strong></span>\`;
-      if(s === "completed") return \`<span class="badge ok"><span class="i"></span><strong>completed</strong></span>\`;
-      if(s === "refunded") return \`<span class="badge"><span class="i"></span><strong>refunded</strong></span>\`;
-      return \`<span class="badge"><span class="i"></span><strong>\${escapeHtml(s)}</strong></span>\`;
-    }
-
-    function renderDeals(){
-      const app = $("#app");
-      if(!state.me){
-        app.innerHTML = \`
-          <div class="section-title"><h2>Сделки</h2><p>Нужен вход</p></div>
-          <div class="card-pad">
-            <span class="badge warn"><span class="i"></span><strong>Войдите</strong>&nbsp;<span class="muted">чтобы видеть покупки и продажи</span></span>
-            <div style="height:10px;"></div>
-            <button class="btn" id="goLogin">Открыть профиль</button>
-          </div>\`;
-        $("#goLogin").addEventListener("click", ()=> setRoute("profile"));
-        return;
-      }
-
-      const rows = (state.orders || []).slice().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).map(o=>{
-        const isBuyer = o.buyerId === state.me.id;
-        const isSeller = o.sellerId === state.me.id;
-        const st = o.status || "pending";
-
-        const actions = [];
-        if(st === "pending" && isBuyer) actions.push(btnAct("Оплатить","pay",o.id,true));
-        if(st === "paid" && isSeller) actions.push(btnAct("Выдал товар","deliver",o.id,true));
-        if(st === "delivered" && isBuyer) actions.push(btnAct("Подтвердить","confirm",o.id,true));
-        actions.push(btnAct("Чат","chat",o.id,false));
-
-        return \`
-          <tr>
-            <td><span class="mono">\${escapeHtml(o.id)}</span><div class="hint">\${escapeHtml(fmtTs(o.createdAt))}</div></td>
-            <td><strong>\${escapeHtml(o.listingTitle || o.title || o.listingId || "—")}</strong><div class="hint">\${escapeHtml(isBuyer ? "Покупка" : (isSeller ? "Продажа" : "—"))}</div></td>
-            <td><strong>\${fmtMoney(o.price)} ₽</strong></td>
-            <td>\${statusBadge(st)}<div class="hint">\${escapeHtml(fmtTs(o.updatedAt))}</div></td>
-            <td><div class="row" style="gap:8px; flex-wrap:wrap;">\${actions.join("")}</div></td>
-          </tr>\`;
-      }).join("") || \`
-        <tr><td colspan="5" style="padding:16px;">
-          <span class="badge warn"><span class="i"></span><strong>Сделок нет</strong></span>
-          <div style="height:10px;"></div>
-          <div class="hint">Купите что-нибудь в Маркете или создайте товар.</div>
-        </td></tr>\`;
-
-      app.innerHTML = \`
-        <div class="section-title">
-          <div><h2>Сделки</h2><p>Оплата → hold → завершение</p></div>
-          <div class="row">
-            <button class="btn-ghost" id="d_reload">Обновить</button>
-            <button class="btn" id="d_wallet">Кошелёк</button>
-          </div>
-        </div>
-
-        <div style="padding:0;">
-          <table class="table">
-            <thead><tr><th>ID</th><th>Товар</th><th>Сумма</th><th>Статус</th><th>Действия</th></tr></thead>
-            <tbody id="dealsBody">\${rows}</tbody>
-          </table>
-        </div>
-
-        <div class="card-pad">
-          <div class="row" style="justify-content: space-between;">
-            <div class="hint">Если при оплате ошибка <b>NO_FUNDS</b> — пополните <b>available</b> в кошельке.</div>
-            <button class="btn" id="d_market">Маркет</button>
-          </div>
-        </div>\`;
-
-      $("#d_reload").addEventListener("click", async ()=>{ await loadOrders(); render(); });
-      $("#d_wallet").addEventListener("click", ()=> setRoute("wallet"));
-      $("#d_market").addEventListener("click", ()=> setRoute("market"));
-
-      $$("#dealsBody [data-act]").forEach(el => el.addEventListener("click", async ()=>{
-        const act = el.dataset.act;
-        const id = el.dataset.id;
-        const o = state.orders.find(x => x.id === id);
-        if(!o) return;
-
-        if(act==="pay") await payOrder(id);
-        if(act==="deliver") await sellerRequestComplete(id);
-        if(act==="confirm") await buyerConfirm(id);
-        if(act==="chat") await openOrderChat(o);
-
-        await loadOrders();
-        render();
-      }));
+      var s = String(st || "pending");
+      if(s === "pending") return '<span class="badge warn"><span class="i"></span><strong>pending</strong></span>';
+      if(s === "paid") return '<span class="badge brand"><span class="i"></span><strong>paid</strong></span>';
+      if(s === "delivered") return '<span class="badge brand"><span class="i"></span><strong>delivered</strong></span>';
+      if(s === "completed") return '<span class="badge ok"><span class="i"></span><strong>completed</strong></span>';
+      if(s === "refunded") return '<span class="badge"><span class="i"></span><strong>refunded</strong></span>';
+      return '<span class="badge"><span class="i"></span><strong>' + escapeHtml(s) + "</strong></span>";
     }
 
     function btnAct(label, act, id, primary){
-      return \`<button class="\${primary ? "btn":"btn-ghost"}" data-act="\${act}" data-id="\${escapeHtml(id)}">\${escapeHtml(label)}</button>\`;
+      return '<button class="' + (primary ? "btn" : "btn-ghost") + '" data-act="' + act + '" data-id="' + escapeHtml(id) + '">' + escapeHtml(label) + "</button>";
     }
 
-    // ----- Chat -----
-    function renderMessages(messages){
-      if(!messages || messages.length === 0){
-        return \`<div class="hint" style="padding:10px;">Пока сообщений нет.</div>\`;
-      }
-      return messages.slice(-300).map(m=>{
-        const me = (m.userId && state.me && m.userId === state.me.id);
-        const who = me ? "Вы" : (m.userNickname || m.userId || "System");
-        const ts = fmtTs(m.ts || m.createdAt || Date.now());
-        const text = m.text || m.body || m.message || "";
-        return \`
-          <div class="msg \${me ? "me":""}">
-            <div class="meta"><span>\${escapeHtml(who)}</span><span>\${escapeHtml(ts)}</span></div>
-            <div class="text">\${escapeHtml(text)}</div>
-          </div>\`;
-      }).join("");
-    }
-    function scrollChatToBottom(smooth=false){
-      const msgs = $("#msgs");
-      if(!msgs) return;
-      msgs.scrollTo({ top: msgs.scrollHeight, behavior: smooth ? "smooth":"auto" });
-    }
-
-    function renderChat(){
-      const app = $("#app");
+    function renderDeals(){
       if(!state.me){
-        app.innerHTML = \`
-          <div class="section-title"><h2>Чаты</h2><p>Нужен вход</p></div>
-          <div class="card-pad">
-            <span class="badge warn"><span class="i"></span><strong>Войдите</strong>&nbsp;<span class="muted">чтобы общаться в сделках</span></span>
-            <div style="height:10px;"></div>
-            <button class="btn" id="goLogin">Открыть профиль</button>
-          </div>\`;
-        $("#goLogin").addEventListener("click", ()=> setRoute("profile"));
+        setApp('<div class="section-title"><h2>Сделки</h2><p>Нужен вход</p></div><div class="card-pad"><span class="badge warn"><span class="i"></span><strong>Войдите</strong>&nbsp;<span class="muted">чтобы видеть покупки и продажи</span></span><div style="height:10px;"></div><button class="btn" id="goLogin">Открыть профиль</button></div>');
+        $("#goLogin").addEventListener("click", function(){ setRoute("profile"); });
         return;
       }
 
-      const rooms = (state.inbox || []).slice().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).map(r=>{
-        const title = r.title || r.room || "room";
-        const last = r.last?.text || r.last?.body || r.last || "";
-        const active = state.activeRoom === r.room;
-        return \`
-          <div class="chatroom \${active ? "active":""}" data-room="\${escapeHtml(r.room)}">
-            <div class="t">\${escapeHtml(title)}</div>
-            <div class="m">\${escapeHtml(String(last).slice(0,80) || "—")}</div>
-          </div>\`;
-      }).join("") || \`
-        <div style="padding:16px;">
-          <span class="badge warn"><span class="i"></span><strong>Чатов нет</strong></span>
-          <div style="height:10px;"></div>
-          <div class="hint">Чаты создаются внутри сделок. Откройте «Сделки» → «Чат».</div>
-        </div>\`;
+      var sorted = state.orders.slice().sort(function(a,b){ return (b.updatedAt||0) - (a.updatedAt||0); });
+      var rows = [];
+      for(var i=0;i<sorted.length;i++){
+        var o = sorted[i];
+        var isBuyer = state.me && (o.buyerId === state.me.id);
+        var isSeller = state.me && (o.sellerId === state.me.id);
+        var st = o.status || "pending";
 
-      app.innerHTML = \`
-        <div class="section-title">
-          <div><h2>Чаты</h2><p>Обновления в реальном времени (SSE)</p></div>
-          <div class="row">
-            <button class="btn-ghost" id="c_reload">Обновить</button>
-            <button class="btn" id="c_deals">Сделки</button>
-          </div>
-        </div>
+        var acts = [];
+        if(st === "pending" && isBuyer) acts.push(btnAct("Оплатить","pay",o.id,true));
+        if(st === "paid" && isSeller) acts.push(btnAct("Выдал товар","deliver",o.id,true));
+        if(st === "delivered" && isBuyer) acts.push(btnAct("Подтвердить","confirm",o.id,true));
+        acts.push(btnAct("Чат","chat",o.id,false));
 
-        <div class="chat">
-          <div class="chatlist">
-            <div class="headbar">
-              <h4>Комнаты</h4>
-              <button class="btn-ghost" id="c_new">+ из сделки</button>
-            </div>
-            <div id="rooms">\${rooms}</div>
-          </div>
+        rows.push("<tr>" +
+          "<td><span class='mono'>" + escapeHtml(o.id) + "</span><div class='hint'>" + escapeHtml(fmtTs(o.createdAt)) + "</div></td>" +
+          "<td><strong>" + escapeHtml(o.listingTitle || o.title || o.listingId || "—") + "</strong><div class='hint'>" + escapeHtml(isBuyer ? "Покупка" : (isSeller ? "Продажа" : "—")) + "</div></td>" +
+          "<td><strong>" + fmtMoney(o.price) + " ₽</strong></td>" +
+          "<td>" + statusBadge(st) + "<div class='hint'>" + escapeHtml(fmtTs(o.updatedAt)) + "</div></td>" +
+          "<td><div class='row' style='gap:8px; flex-wrap:wrap;'>" + acts.join("") + "</div></td>" +
+          "</tr>");
+      }
 
-          <div class="chatbox">
-            <div class="headbar">
-              <div class="title">\${escapeHtml(state.activeRoom || "Выберите чат")}</div>
-              <button class="btn-ghost" id="c_close">Скрыть</button>
-            </div>
-            <div class="msgs" id="msgs">\${renderMessages(state.roomMessages)}</div>
-            <div class="sendbar">
-              <input class="field" id="c_text" placeholder="Сообщение…" \${state.activeRoom ? "" : "disabled"}>
-              <button class="btn" id="c_send" \${state.activeRoom ? "" : "disabled"}>Отправить</button>
-            </div>
-          </div>
-        </div>\`;
+      if(rows.length === 0){
+        rows.push("<tr><td colspan='5' style='padding:16px;'>" +
+          '<span class="badge warn"><span class="i"></span><strong>Сделок нет</strong></span>' +
+          "<div style='height:10px;'></div>" +
+          '<div class="hint">Купите что-нибудь в Маркете или создайте товар.</div>' +
+          "</td></tr>");
+      }
 
-      $("#c_reload").addEventListener("click", ()=> loadInbox(true));
-      $("#c_deals").addEventListener("click", ()=> setRoute("deals"));
-      $("#c_new").addEventListener("click", ()=> setRoute("deals"));
-      $("#c_close").addEventListener("click", ()=>{ state.activeRoom=null; state.roomMessages=[]; render(); });
+      var html = "";
+      html += '<div class="section-title"><div><h2>Сделки</h2><p>Оплата -> hold -> завершение</p></div><div class="row"><button class="btn-ghost" id="d_reload">Обновить</button><button class="btn" id="d_wallet">Кошелек</button></div></div>';
+      html += '<div style="padding:0;"><table class="table"><thead><tr><th>ID</th><th>Товар</th><th>Сумма</th><th>Статус</th><th>Действия</th></tr></thead><tbody id="dealsBody">' + rows.join("") + "</tbody></table></div>";
+      html += '<div class="card-pad"><div class="row" style="justify-content: space-between;"><div class="hint">Если при оплате ошибка <b>NO_FUNDS</b> - пополните <b>available</b> в кошельке.</div><button class="btn" id="d_market">Маркет</button></div></div>';
 
-      $$("#rooms .chatroom").forEach(el => el.addEventListener("click", async ()=>{
-        const room = el.dataset.room;
-        await loadRoom(room);
-        startSSE();
-      }));
+      setApp(html);
 
-      $("#c_send").addEventListener("click", async ()=>{
-        const t = $("#c_text");
-        await sendChat(t.value);
-        t.value = ""; t.focus();
+      $("#d_reload").addEventListener("click", function(){ loadOrders().then(function(){ render(); }); });
+      $("#d_wallet").addEventListener("click", function(){ setRoute("wallet"); });
+      $("#d_market").addEventListener("click", function(){ setRoute("market"); });
+
+      $$("#dealsBody [data-act]").forEach(function(el){
+        el.addEventListener("click", function(){
+          var act = el.dataset.act;
+          var id = el.dataset.id;
+          var o = null;
+          for(var i=0;i<state.orders.length;i++){ if(state.orders[i].id === id){ o = state.orders[i]; break; } }
+          if(!o) return;
+
+          var p = Promise.resolve();
+          if(act === "pay") p = payOrder(id);
+          if(act === "deliver") p = sellerRequestComplete(id);
+          if(act === "confirm") p = buyerConfirm(id);
+          if(act === "chat") p = openOrderChat(o);
+
+          p.then(function(){ return loadOrders(); }).then(function(){ render(); });
+        });
       });
-      $("#c_text").addEventListener("keydown", async (e)=>{
+    }
+
+    function renderMessages(messages){
+      if(!messages || messages.length === 0){
+        return '<div class="hint" style="padding:10px;">Пока сообщений нет.</div>';
+      }
+      var slice = messages.slice(Math.max(0, messages.length - 300));
+      var out = [];
+      for(var i=0;i<slice.length;i++){
+        var m = slice[i];
+        var me = (m.userId && state.me && m.userId === state.me.id);
+        var who = me ? "Вы" : (m.userNickname || m.userId || "System");
+        var ts = fmtTs(m.ts || m.createdAt || Date.now());
+        var text = m.text || m.body || m.message || "";
+        out.push('<div class="msg ' + (me ? "me" : "") + '">' +
+          '<div class="meta"><span>' + escapeHtml(who) + "</span><span>" + escapeHtml(ts) + "</span></div>" +
+          '<div class="text">' + escapeHtml(text) + "</div>" +
+          "</div>");
+      }
+      return out.join("");
+    }
+
+    function scrollChatToBottom(smooth){
+      var msgs = $("#msgs");
+      if(!msgs) return;
+      try{
+        msgs.scrollTo({ top: msgs.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+      }catch(e){
+        msgs.scrollTop = msgs.scrollHeight;
+      }
+    }
+
+    function renderChat(){
+      if(!state.me){
+        setApp('<div class="section-title"><h2>Чаты</h2><p>Нужен вход</p></div><div class="card-pad"><span class="badge warn"><span class="i"></span><strong>Войдите</strong>&nbsp;<span class="muted">чтобы общаться в сделках</span></span><div style="height:10px;"></div><button class="btn" id="goLogin">Открыть профиль</button></div>');
+        $("#goLogin").addEventListener("click", function(){ setRoute("profile"); });
+        return;
+      }
+
+      var rooms = state.inbox.slice().sort(function(a,b){ return (b.updatedAt||0)-(a.updatedAt||0); });
+      var rh = [];
+      for(var i=0;i<rooms.length;i++){
+        var r = rooms[i];
+        var title = r.title || r.room || "room";
+        var last = r.last && (r.last.text || r.last.body || r.last.message) ? (r.last.text || r.last.body || r.last.message) : r.last || "";
+        var active = state.activeRoom === r.room;
+        rh.push('<div class="chatroom ' + (active ? "active" : "") + '" data-room="' + escapeHtml(r.room) + '">' +
+          '<div class="t">' + escapeHtml(title) + "</div>" +
+          '<div class="m">' + escapeHtml(String(last).slice(0,80) || "—") + "</div>" +
+          "</div>");
+      }
+      if(rh.length === 0){
+        rh.push('<div style="padding:16px;"><span class="badge warn"><span class="i"></span><strong>Чатов нет</strong></span><div style="height:10px;"></div><div class="hint">Чаты создаются внутри сделок. Откройте «Сделки» -> «Чат».</div></div>');
+      }
+
+      var html = "";
+      html += '<div class="section-title"><div><h2>Чаты</h2><p>Обновления в реальном времени (SSE)</p></div><div class="row"><button class="btn-ghost" id="c_reload">Обновить</button><button class="btn" id="c_deals">Сделки</button></div></div>';
+      html += '<div class="chat">';
+      html += '<div class="chatlist"><div class="headbar"><h4>Комнаты</h4><button class="btn-ghost" id="c_new">+ из сделки</button></div><div id="rooms">' + rh.join("") + "</div></div>";
+      html += '<div class="chatbox"><div class="headbar"><div class="title">' + escapeHtml(state.activeRoom || "Выберите чат") + '</div><button class="btn-ghost" id="c_close">Скрыть</button></div>';
+      html += '<div class="msgs" id="msgs">' + renderMessages(state.roomMessages) + '</div>';
+      html += '<div class="sendbar"><input class="field" id="c_text" placeholder="Сообщение..." ' + (state.activeRoom ? "" : "disabled") + '><button class="btn" id="c_send" ' + (state.activeRoom ? "" : "disabled") + ">Отправить</button></div>";
+      html += "</div></div>";
+
+      setApp(html);
+
+      $("#c_reload").addEventListener("click", function(){ loadInbox(true); });
+      $("#c_deals").addEventListener("click", function(){ setRoute("deals"); });
+      $("#c_new").addEventListener("click", function(){ setRoute("deals"); });
+      $("#c_close").addEventListener("click", function(){ state.activeRoom = null; state.roomMessages = []; render(); });
+
+      $$("#rooms .chatroom").forEach(function(el){
+        el.addEventListener("click", function(){
+          var room = el.dataset.room;
+          loadRoom(room).then(function(){ startSSE(); });
+        });
+      });
+
+      $("#c_send").addEventListener("click", function(){
+        var t = $("#c_text");
+        sendChat(t.value).then(function(){ t.value = ""; t.focus(); });
+      });
+
+      $("#c_text").addEventListener("keydown", function(e){
         if(e.key === "Enter" && !e.shiftKey){
           e.preventDefault();
-          const t = $("#c_text");
-          await sendChat(t.value);
-          t.value = "";
+          var t = $("#c_text");
+          sendChat(t.value).then(function(){ t.value = ""; });
         }
       });
 
@@ -1707,374 +1665,318 @@
       scrollChatToBottom();
     }
 
-    // ----- Wallet -----
     function renderWallet(){
-      const app = $("#app");
       if(!state.me){
-        app.innerHTML = \`
-          <div class="section-title"><h2>Кошелёк</h2><p>Нужен вход</p></div>
-          <div class="card-pad">
-            <span class="badge warn"><span class="i"></span><strong>Войдите</strong>&nbsp;<span class="muted">чтобы пополнять и платить</span></span>
-            <div style="height:10px;"></div>
-            <button class="btn" id="goLogin">Открыть профиль</button>
-          </div>\`;
-        $("#goLogin").addEventListener("click", ()=> setRoute("profile"));
+        setApp('<div class="section-title"><h2>Кошелёк</h2><p>Нужен вход</p></div><div class="card-pad"><span class="badge warn"><span class="i"></span><strong>Войдите</strong>&nbsp;<span class="muted">чтобы пополнять и платить</span></span><div style="height:10px;"></div><button class="btn" id="goLogin">Открыть профиль</button></div>');
+        $("#goLogin").addEventListener("click", function(){ setRoute("profile"); });
         return;
       }
 
-      const w = state.wallet || { available:0, hold:0 };
-      const pending = getPendingTopup();
+      var w = state.wallet || { available:0, hold:0 };
+      var pending = getPendingTopup();
 
-      const hist = (state.walletHistory || []).slice().reverse().slice(0, 30).map(h => \`
-        <tr>
-          <td>\${escapeHtml(h.type || "—")}</td>
-          <td><strong>\${fmtMoney(h.amount)} \${escapeHtml(h.currency || "RUB")}</strong><div class="hint">\${escapeHtml(h.provider || "")}</div></td>
-          <td class="hint">\${escapeHtml(fmtTs(h.ts || h.createdAt))}</td>
-        </tr>\`).join("") || \`<tr><td colspan="3" style="padding:16px;"><div class="hint">История пока пустая.</div></td></tr>\`;
+      var hist = [];
+      var rev = state.walletHistory.slice().reverse().slice(0, 30);
+      for(var i=0;i<rev.length;i++){
+        var h = rev[i];
+        hist.push("<tr>" +
+          "<td>" + escapeHtml(h.type || "—") + "</td>" +
+          "<td><strong>" + fmtMoney(h.amount) + " " + escapeHtml(h.currency || "RUB") + "</strong><div class='hint'>" + escapeHtml(h.provider || "") + "</div></td>" +
+          "<td class='hint'>" + escapeHtml(fmtTs(h.ts || h.createdAt)) + "</td>" +
+          "</tr>");
+      }
+      if(hist.length === 0){
+        hist.push("<tr><td colspan='3' style='padding:16px;'><div class='hint'>История пока пустая.</div></td></tr>");
+      }
 
-      app.innerHTML = \`
-        <div class="section-title">
-          <div><h2>Кошелёк</h2><p>Баланс и пополнения</p></div>
-          <div class="row">
-            <button class="btn-ghost" id="w_reload">Обновить</button>
-            <button class="btn" id="w_deals">Сделки</button>
-          </div>
-        </div>
-
-        <div class="card-pad">
-          <div class="row" style="gap:12px; flex-wrap:wrap;">
-            <span class="badge brand"><span class="i"></span><strong>available</strong>&nbsp;\${fmtMoney(w.available)} ₽</span>
-            <span class="badge"><span class="i"></span><strong>hold</strong>&nbsp;\${fmtMoney(w.hold)} ₽</span>
-            <div class="hint" style="margin-left:auto;">Для оплаты нужна сумма на <b>available</b>.</div>
-          </div>
-
-          \${pending ? \`
-            <div style="height:12px;"></div>
-            <span class="badge warn"><span class="i"></span><strong>Ожидает платёж</strong>&nbsp;<span class="muted mono">\${escapeHtml(pending.id)}</span></span>
-            <div style="height:10px;"></div>
-            <div class="row">
-              <button class="btn-ghost" id="w_openPay">Открыть оплату</button>
-              <button class="btn" id="w_checkPay">Проверить</button>
-              <button class="btn-ghost" id="w_dropPay">Сбросить</button>
-            </div>\` : ""}
-
-          <div style="height:14px;"></div>
-
-          <div class="grid2">
-            <div class="card" style="overflow:hidden;">
-              <div class="section-title" style="position:unset;">
-                <div><h2 style="font-size:16px;">Пополнить</h2><p>Авто или заявка</p></div>
-              </div>
-              <div class="card-pad">
-                <div class="grid2">
-                  <div>
-                    <div class="hint" style="margin-bottom:6px;">Сумма (₽)</div>
-                    <input class="field" id="w_topupAmt" type="number" min="1" step="1" value="500">
-                  </div>
-                  <div>
-                    <div class="hint" style="margin-bottom:6px;">Способ</div>
-                    <select class="field" id="w_method">
-                      <option value="rukassa">RuKassa (FK) — авто</option>
-                      <option value="paradise">Paradise — авто</option>
-                      <option value="cryptobot">CryptoBot — авто</option>
-                      <option value="stripe">Stripe — авто</option>
-                      <option value="request">Заявка менеджеру — вручную</option>
-                    </select>
-                  </div>
-                </div>
-                <div style="height:10px;"></div>
-                <div class="row">
-                  <button class="btn" id="w_topup">Начать</button>
-                  <button class="btn-ghost" id="w_help">Как работает</button>
-                </div>
-                <div style="height:10px;"></div>
-                <div class="hint">
-                  Если провайдер не настроен на сервере — будет ошибка. Откройте <b>Debug</b> (иконка колбы) и посмотрите ответ.
-                </div>
-              </div>
-            </div>
-
-            <div class="card" style="overflow:hidden;">
-              <div class="section-title" style="position:unset;">
-                <div><h2 style="font-size:16px;">Вывести</h2><p>Заявка</p></div>
-              </div>
-              <div class="card-pad">
-                <div>
-                  <div class="hint" style="margin-bottom:6px;">Сумма (₽)</div>
-                  <input class="field" id="w_withAmt" type="number" min="1" step="1" value="500">
-                </div>
-                <div style="height:10px;"></div>
-                <button class="btn btn-danger" id="w_with">Создать заявку</button>
-                <div style="height:10px;"></div>
-                <div class="hint">Вывод обрабатывается вручную. Комиссии/лимиты зависят от правил сервиса.</div>
-              </div>
-            </div>
-          </div>
-
-          <div style="height:14px;"></div>
-
-          <div class="card" style="overflow:hidden;">
-            <div class="section-title" style="position:unset;">
-              <div><h2 style="font-size:16px;">История</h2><p>Последние операции</p></div>
-            </div>
-            <div style="padding:0;">
-              <table class="table">
-                <thead><tr><th>Тип</th><th>Сумма</th><th>Дата</th></tr></thead>
-                <tbody>\${hist}</tbody>
-              </table>
-            </div>
-          </div>
-        </div>\`;
-
-      $("#w_reload").addEventListener("click", async ()=>{ await loadWalletAll(); render(); });
-      $("#w_deals").addEventListener("click", ()=> setRoute("deals"));
+      var html = "";
+      html += '<div class="section-title"><div><h2>Кошелёк</h2><p>Баланс и пополнения</p></div><div class="row"><button class="btn-ghost" id="w_reload">Обновить</button><button class="btn" id="w_deals">Сделки</button></div></div>';
+      html += '<div class="card-pad">';
+      html += '<div class="row" style="gap:12px; flex-wrap:wrap;">' +
+        '<span class="badge brand"><span class="i"></span><strong>available</strong>&nbsp;' + fmtMoney(w.available) + " ₽</span>" +
+        '<span class="badge"><span class="i"></span><strong>hold</strong>&nbsp;' + fmtMoney(w.hold) + " ₽</span>" +
+        '<div class="hint" style="margin-left:auto;">Для оплаты нужна сумма на <b>available</b>.</div>' +
+        "</div>";
 
       if(pending){
-        $("#w_openPay").addEventListener("click", ()=> window.open(pending.url, "_blank", "noopener"));
-        $("#w_checkPay").addEventListener("click", ()=> payCheckPending());
-        $("#w_dropPay").addEventListener("click", async ()=>{
-          const ok = await Modal.confirm({ title:"Сбросить ожидание?", message:"Это не отменяет платёж у провайдера. Просто уберёт напоминание.", confirmLabel:"Сбросить", danger:true });
-          if(!ok) return;
-          localStorage.removeItem(LS.pendingTopup);
-          toast("Сброшено", "Ожидающий платёж удалён", "ok");
-          render();
+        html += '<div style="height:12px;"></div>';
+        html += '<span class="badge warn"><span class="i"></span><strong>Ожидает платёж</strong>&nbsp;<span class="muted mono">' + escapeHtml(pending.id) + "</span></span>";
+        html += '<div style="height:10px;"></div>';
+        html += '<div class="row"><button class="btn-ghost" id="w_openPay">Открыть оплату</button><button class="btn" id="w_checkPay">Проверить</button><button class="btn-ghost" id="w_dropPay">Сбросить</button></div>';
+      }
+
+      html += '<div style="height:14px;"></div>';
+      html += '<div class="grid2">';
+
+      html += '<div class="card" style="overflow:hidden;">' +
+        '<div class="section-title" style="position:unset;"><div><h2 style="font-size:16px;">Пополнить</h2><p>Авто или заявка</p></div></div>' +
+        '<div class="card-pad">' +
+        '<div class="grid2">' +
+        '<div><div class="hint" style="margin-bottom:6px;">Сумма (₽)</div><input class="field" id="w_topupAmt" type="number" min="1" step="1" value="500"></div>' +
+        '<div><div class="hint" style="margin-bottom:6px;">Способ</div>' +
+        '<select class="field" id="w_method">' +
+        '<option value="rukassa">RuKassa (FK) - авто</option>' +
+        '<option value="paradise">Paradise - авто</option>' +
+        '<option value="cryptobot">CryptoBot - авто</option>' +
+        '<option value="stripe">Stripe - авто</option>' +
+        '<option value="request">Заявка менеджеру - вручную</option>' +
+        "</select></div></div>" +
+        '<div style="height:10px;"></div>' +
+        '<div class="row"><button class="btn" id="w_topup">Начать</button><button class="btn-ghost" id="w_help">Как работает</button></div>' +
+        '<div style="height:10px;"></div>' +
+        '<div class="hint">Если провайдер не настроен на сервере - будет ошибка. Откройте Debug (иконка колбы) и посмотрите ответ.</div>' +
+        "</div></div>";
+
+      html += '<div class="card" style="overflow:hidden;">' +
+        '<div class="section-title" style="position:unset;"><div><h2 style="font-size:16px;">Вывести</h2><p>Заявка</p></div></div>' +
+        '<div class="card-pad">' +
+        '<div><div class="hint" style="margin-bottom:6px;">Сумма (₽)</div><input class="field" id="w_withAmt" type="number" min="1" step="1" value="500"></div>' +
+        '<div style="height:10px;"></div>' +
+        '<button class="btn btn-danger" id="w_with">Создать заявку</button>' +
+        '<div style="height:10px;"></div>' +
+        '<div class="hint">Вывод обрабатывается вручную. Комиссии и лимиты зависят от правил сервиса.</div>' +
+        "</div></div>";
+
+      html += "</div>";
+      html += '<div style="height:14px;"></div>';
+
+      html += '<div class="card" style="overflow:hidden;">' +
+        '<div class="section-title" style="position:unset;"><div><h2 style="font-size:16px;">История</h2><p>Последние операции</p></div></div>' +
+        '<div style="padding:0;"><table class="table"><thead><tr><th>Тип</th><th>Сумма</th><th>Дата</th></tr></thead><tbody>' + hist.join("") + "</tbody></table></div>" +
+        "</div>";
+
+      html += "</div>";
+
+      setApp(html);
+
+      $("#w_reload").addEventListener("click", function(){ loadWalletAll().then(function(){ render(); }); });
+      $("#w_deals").addEventListener("click", function(){ setRoute("deals"); });
+
+      if(pending){
+        $("#w_openPay").addEventListener("click", function(){ try{ window.open(pending.url, "_blank", "noopener"); }catch(e){} });
+        $("#w_checkPay").addEventListener("click", function(){ payCheckPending(); });
+        $("#w_dropPay").addEventListener("click", function(){
+          Modal.confirm({ title:"Сбросить ожидание?", message:"Это не отменяет платеж у провайдера. Просто уберет напоминание.", confirmLabel:"Сбросить", danger:true })
+            .then(function(ok){
+              if(!ok) return;
+              clearPendingTopup();
+              toast("Сброшено", "Ожидающий платеж удален", "ok");
+              render();
+            });
         });
       }
 
-      $("#w_help").addEventListener("click", ()=>{
-        Modal.open({
-          title:"Как работает кошелёк",
-          body: \`
-            <div class="hint">Коротко:</div>
-            <ul style="margin:6px 0 0; padding-left:18px; line-height:1.55;">
-              <li><b>available</b> — доступно для оплаты.</li>
-              <li><b>hold</b> — в эскроу (после оплаты сделки).</li>
-              <li>Покупатель оплачивает → сумма уходит в <b>hold</b>.</li>
-              <li>После подтверждения — деньги выходят из hold и зачисляются продавцу.</li>
-            </ul>\`,
-          buttons:[{ label:"Понятно", kind:"primary" }]
-        });
+      $("#w_help").addEventListener("click", function(){
+        var body = "";
+        body += '<div class="hint">Коротко:</div>';
+        body += '<ul style="margin:6px 0 0; padding-left:18px; line-height:1.55;">';
+        body += "<li><b>available</b> - доступно для оплаты.</li>";
+        body += "<li><b>hold</b> - в эскроу (после оплаты сделки).</li>";
+        body += "<li>Покупатель оплачивает - сумма уходит в <b>hold</b>.</li>";
+        body += "<li>После подтверждения - деньги выходят из hold и зачисляются продавцу.</li>";
+        body += "</ul>";
+        Modal.open({ title:"Как работает кошелек", body: body, buttons: [ { label:"Понятно", kind:"primary" } ] });
       });
 
-      $("#w_topup").addEventListener("click", async ()=>{
-        const amt = Number($("#w_topupAmt").value || 0);
-        const method = $("#w_method").value;
-        if(!(amt > 0)) return toast("Неверная сумма", "Укажите сумму > 0", "warn");
+      $("#w_topup").addEventListener("click", function(){
+        var amt = Number($("#w_topupAmt").value || 0);
+        var method = $("#w_method").value;
+        if(!(amt > 0)){ toast("Неверная сумма", "Укажите сумму > 0", "warn"); return; }
         if(method === "request"){
-          await walletDepositRequest(amt);
-        } else {
-          await payCreate(method, amt);
+          walletDepositRequest(amt);
+        }else{
+          payCreate(method, amt);
         }
-        await loadWalletAll();
-        render();
+        loadWalletAll().then(function(){ render(); });
       });
 
-      $("#w_with").addEventListener("click", async ()=>{
-        const amt = Number($("#w_withAmt").value || 0);
-        if(!(amt > 0)) return toast("Неверная сумма", "Укажите сумму > 0", "warn");
-        await walletWithdrawRequest(amt);
+      $("#w_with").addEventListener("click", function(){
+        var amt = Number($("#w_withAmt").value || 0);
+        if(!(amt > 0)){ toast("Неверная сумма", "Укажите сумму > 0", "warn"); return; }
+        walletWithdrawRequest(amt);
       });
 
       if(!state.wallet) loadWalletAll();
     }
 
-    // ----- Profile -----
     function renderProfile(){
-      const app = $("#app");
-      const theme = document.documentElement.dataset.theme || "dark";
+      var theme = document.documentElement.dataset.theme || "dark";
 
       if(!state.me){
-        app.innerHTML = \`
-          <div class="section-title">
-            <div><h2>Профиль</h2><p>Вход и регистрация</p></div>
-            <div class="row">
-              <button class="btn-ghost" id="p_theme">Тема: \${escapeHtml(theme)}</button>
-              <button class="btn" id="p_market">Маркет</button>
-            </div>
-          </div>
+        var html = "";
+        html += '<div class="section-title"><div><h2>Профиль</h2><p>Вход и регистрация</p></div><div class="row"><button class="btn-ghost" id="p_theme">Тема: ' + escapeHtml(theme) + '</button><button class="btn" id="p_market">Маркет</button></div></div>';
+        html += '<div class="card-pad">';
+        html += '<div class="grid2">';
 
-          <div class="card-pad">
-            <div class="grid2">
-              <div class="card" style="overflow:hidden;">
-                <div class="section-title" style="position:unset;">
-                  <div><h2 style="font-size:16px;">Войти</h2><p>email + пароль</p></div>
-                </div>
-                <div class="card-pad">
-                  <div class="grid2">
-                    <div>
-                      <div class="hint" style="margin-bottom:6px;">Email</div>
-                      <input class="field" id="l_email" placeholder="you@mail.com">
-                    </div>
-                    <div>
-                      <div class="hint" style="margin-bottom:6px;">Пароль</div>
-                      <input class="field" id="l_pass" type="password" placeholder="••••••••">
-                    </div>
-                  </div>
-                  <div style="height:10px;"></div>
-                  <button class="btn" id="l_go">Войти</button>
-                </div>
-              </div>
+        html += '<div class="card" style="overflow:hidden;">' +
+          '<div class="section-title" style="position:unset;"><div><h2 style="font-size:16px;">Войти</h2><p>email + пароль</p></div></div>' +
+          '<div class="card-pad">' +
+          '<div class="grid2">' +
+          '<div><div class="hint" style="margin-bottom:6px;">Email</div><input class="field" id="l_email" placeholder="you@mail.com"></div>' +
+          '<div><div class="hint" style="margin-bottom:6px;">Пароль</div><input class="field" id="l_pass" type="password" placeholder="••••••••"></div>' +
+          "</div>" +
+          '<div style="height:10px;"></div>' +
+          '<button class="btn" id="l_go">Войти</button>' +
+          "</div></div>";
 
-              <div class="card" style="overflow:hidden;">
-                <div class="section-title" style="position:unset;">
-                  <div><h2 style="font-size:16px;">Регистрация</h2><p>быстро</p></div>
-                </div>
-                <div class="card-pad">
-                  <div class="grid2">
-                    <div>
-                      <div class="hint" style="margin-bottom:6px;">Ник</div>
-                      <input class="field" id="r_nick" placeholder="nickname">
-                    </div>
-                    <div>
-                      <div class="hint" style="margin-bottom:6px;">Email</div>
-                      <input class="field" id="r_email" placeholder="you@mail.com">
-                    </div>
-                    <div style="grid-column: 1 / -1;">
-                      <div class="hint" style="margin-bottom:6px;">Пароль</div>
-                      <input class="field" id="r_pass" type="password" placeholder="минимум 6 символов">
-                    </div>
-                  </div>
-                  <div style="height:10px;"></div>
-                  <button class="btn" id="r_go">Создать аккаунт</button>
-                </div>
-              </div>
-            </div>
+        html += '<div class="card" style="overflow:hidden;">' +
+          '<div class="section-title" style="position:unset;"><div><h2 style="font-size:16px;">Регистрация</h2><p>быстро</p></div></div>' +
+          '<div class="card-pad">' +
+          '<div class="grid2">' +
+          '<div><div class="hint" style="margin-bottom:6px;">Ник</div><input class="field" id="r_nick" placeholder="nickname"></div>' +
+          '<div><div class="hint" style="margin-bottom:6px;">Email</div><input class="field" id="r_email" placeholder="you@mail.com"></div>' +
+          '<div style="grid-column: 1 / -1;"><div class="hint" style="margin-bottom:6px;">Пароль</div><input class="field" id="r_pass" type="password" placeholder="минимум 6 символов"></div>' +
+          "</div>" +
+          '<div style="height:10px;"></div>' +
+          '<button class="btn" id="r_go">Создать аккаунт</button>' +
+          "</div></div>";
 
-            <div style="height:12px;"></div>
-            <div class="hint">Если что-то “не работает” — чаще всего эндпоинт на бэке называется иначе. Нажмите <b>Debug</b> (иконка колбы) и проверьте ответы API.</div>
-          </div>\`;
+        html += "</div>";
+        html += '<div style="height:12px;"></div><div class="hint">Если API не совпадает - нажмите Debug (иконка колбы) и посмотрите ответы.</div>';
+        html += "</div>";
 
-        $("#p_theme").addEventListener("click", ()=> applyTheme(theme === "dark" ? "light":"dark"));
-        $("#p_market").addEventListener("click", ()=> setRoute("market"));
+        setApp(html);
 
-        $("#l_go").addEventListener("click", async ()=>{
-          const email = $("#l_email").value.trim();
-          const pass = $("#l_pass").value;
-          if(!email || !pass) return toast("Заполните поля", "Email и пароль", "warn");
-          const ok = await doLogin(email, pass);
-          if(ok){
-            await Promise.allSettled([loadWallet(), loadOrders()]);
-            setRoute("market");
-          }
+        $("#p_theme").addEventListener("click", function(){ applyTheme(theme === "dark" ? "light" : "dark"); });
+        $("#p_market").addEventListener("click", function(){ setRoute("market"); });
+
+        $("#l_go").addEventListener("click", function(){
+          var email = $("#l_email").value.trim();
+          var pass = $("#l_pass").value;
+          if(!email || !pass){ toast("Заполните поля", "Email и пароль", "warn"); return; }
+          doLogin(email, pass).then(function(ok){
+            if(ok){ Promise.allSettled([loadWallet(), loadOrders()]).then(function(){ setRoute("market"); }); }
+          });
         });
 
-        $("#r_go").addEventListener("click", async ()=>{
-          const nick = $("#r_nick").value.trim();
-          const email = $("#r_email").value.trim();
-          const pass = $("#r_pass").value;
-          if(!nick || !email || !pass) return toast("Заполните поля", "Ник, email, пароль", "warn");
-          if(pass.length < 6) return toast("Слишком короткий пароль", "Минимум 6 символов", "warn");
-          const ok = await doRegister(email, pass, nick);
-          if(ok){
-            await Promise.allSettled([loadWallet(), loadOrders()]);
-            setRoute("market");
-          }
+        $("#r_go").addEventListener("click", function(){
+          var nick = $("#r_nick").value.trim();
+          var email = $("#r_email").value.trim();
+          var pass = $("#r_pass").value;
+          if(!nick || !email || !pass){ toast("Заполните поля", "Ник, email, пароль", "warn"); return; }
+          if(pass.length < 6){ toast("Слишком короткий пароль", "Минимум 6 символов", "warn"); return; }
+          doRegister(email, pass, nick).then(function(ok){
+            if(ok){ Promise.allSettled([loadWallet(), loadOrders()]).then(function(){ setRoute("market"); }); }
+          });
         });
 
         return;
       }
 
-      // logged in
-      app.innerHTML = \`
-        <div class="section-title">
-          <div><h2>Профиль</h2><p>Аккаунт и настройки</p></div>
-          <div class="row">
-            <button class="btn-ghost" id="p_theme">Тема: \${escapeHtml(theme)}</button>
-            <button class="btn btn-danger" id="p_logout">Выйти</button>
-          </div>
-        </div>
+      var html2 = "";
+      html2 += '<div class="section-title"><div><h2>Профиль</h2><p>Аккаунт и настройки</p></div><div class="row"><button class="btn-ghost" id="p_theme">Тема: ' + escapeHtml(theme) + '</button><button class="btn btn-danger" id="p_logout">Выйти</button></div></div>';
+      html2 += '<div class="card-pad">';
+      html2 += '<div class="row" style="justify-content: space-between; flex-wrap: wrap;">';
+      html2 += "<div>";
+      html2 += '<span class="badge brand"><span class="i"></span><strong>' + escapeHtml(state.me.nickname || "User") + "</strong></span>";
+      html2 += '<div style="height:10px;"></div>';
+      html2 += '<div class="hint">Email: <b>' + escapeHtml(state.me.email || "—") + "</b></div>";
+      html2 += '<div class="hint">ID: <span class="mono">' + escapeHtml(state.me.id || "—") + "</span></div>";
+      var roles = (state.me.roles && state.me.roles.join) ? state.me.roles.join(",") : "user";
+      html2 += '<div class="hint">Roles: <span class="mono">' + escapeHtml(roles) + "</span></div>";
+      html2 += "</div>";
+      html2 += '<div class="row"><button class="btn" id="p_wallet">Кошелёк</button><button class="btn-ghost" id="p_deals">Сделки</button><button class="btn-ghost" id="p_chat">Чаты</button></div>';
+      html2 += "</div>";
 
-        <div class="card-pad">
-          <div class="row" style="justify-content: space-between; flex-wrap: wrap;">
-            <div>
-              <span class="badge brand"><span class="i"></span><strong>\${escapeHtml(state.me.nickname || "User")}</strong></span>
-              <div style="height:10px;"></div>
-              <div class="hint">Email: <b>\${escapeHtml(state.me.email || "—")}</b></div>
-              <div class="hint">ID: <span class="mono">\${escapeHtml(state.me.id || "—")}</span></div>
-              <div class="hint">Roles: <span class="mono">\${escapeHtml((state.me.roles || ["user"]).join(","))}</span></div>
-            </div>
-            <div class="row">
-              <button class="btn" id="p_wallet">Кошелёк</button>
-              <button class="btn-ghost" id="p_deals">Сделки</button>
-              <button class="btn-ghost" id="p_chat">Чаты</button>
-            </div>
-          </div>
+      html2 += '<div style="height:14px;"></div>';
+      html2 += '<div class="card" style="overflow:hidden;">';
+      html2 += '<div class="section-title" style="position:unset;"><div><h2 style="font-size:16px;">Быстрые проверки</h2><p>для дебага</p></div></div>';
+      html2 += '<div class="card-pad"><div class="row" style="justify-content: space-between; flex-wrap:wrap;">';
+      html2 += '<div class="hint">Сервер: <b>' + escapeHtml((state.health && (state.health.v || state.health.version)) || "—") + "</b></div>";
+      html2 += '<div class="row"><button class="btn-ghost" id="p_health">Обновить health</button><button class="btn-ghost" id="p_me">Перезагрузить me</button><button class="btn" id="p_debug">Debug API</button></div>';
+      html2 += "</div><div style='height:10px;'></div><div class='hint'>Если API не совпадает - это видно в Debug (404 / NOT_FOUND).</div></div>";
+      html2 += "</div>";
 
-          <div style="height:14px;"></div>
+      html2 += "</div>";
 
-          <div class="card" style="overflow:hidden;">
-            <div class="section-title" style="position:unset;">
-              <div><h2 style="font-size:16px;">Быстрые проверки</h2><p>для дебага</p></div>
-            </div>
-            <div class="card-pad">
-              <div class="row" style="justify-content: space-between; flex-wrap:wrap;">
-                <div class="hint">Сервер: <b>\${escapeHtml(state.health?.v || state.health?.version || "—")}</b></div>
-                <div class="row">
-                  <button class="btn-ghost" id="p_health">Обновить health</button>
-                  <button class="btn-ghost" id="p_me">Перезагрузить me</button>
-                  <button class="btn" id="p_debug">Debug API</button>
-                </div>
-              </div>
-              <div style="height:10px;"></div>
-              <div class="hint">Если API не совпадает — это видно в Debug (404 / NOT_FOUND).</div>
-            </div>
-          </div>
-        </div>\`;
+      setApp(html2);
 
-      $("#p_theme").addEventListener("click", ()=> applyTheme(theme === "dark" ? "light":"dark"));
-      $("#p_logout").addEventListener("click", doLogout);
-      $("#p_wallet").addEventListener("click", ()=> setRoute("wallet"));
-      $("#p_deals").addEventListener("click", ()=> setRoute("deals"));
-      $("#p_chat").addEventListener("click", ()=> setRoute("chat"));
-      $("#p_health").addEventListener("click", loadHealth);
-      $("#p_me").addEventListener("click", loadMe);
-      $("#p_debug").addEventListener("click", openDebug);
+      $("#p_theme").addEventListener("click", function(){ applyTheme(theme === "dark" ? "light" : "dark"); });
+      $("#p_logout").addEventListener("click", function(){ doLogout(); });
+      $("#p_wallet").addEventListener("click", function(){ setRoute("wallet"); });
+      $("#p_deals").addEventListener("click", function(){ setRoute("deals"); });
+      $("#p_chat").addEventListener("click", function(){ setRoute("chat"); });
+      $("#p_health").addEventListener("click", function(){ loadHealth(); });
+      $("#p_me").addEventListener("click", function(){ loadMe(); });
+      $("#p_debug").addEventListener("click", function(){ openDebug(); });
     }
 
-    // ---------- Debug ----------
     function openDebug(){
-      const routes = [
+      var routes = [
         { name:"health", path:"/api/health" },
         { name:"me", path:"/api/me" },
         { name:"categories", path:"/api/categories" },
         { name:"listings", path:"/api/listings?limit=3" },
         { name:"orders", path:"/api/orders" },
         { name:"wallet", path:"/api/wallet" },
-        { name:"inbox", path:"/api/chat/inbox" },
+        { name:"inbox", path:"/api/chat/inbox" }
       ];
+
+      var body = "";
+      body += '<div class="hint">Нажимайте, чтобы увидеть сырой ответ (удобно ловить несовпадение эндпоинтов).</div>';
+      body += '<div style="height:10px;"></div>';
+      body += '<div class="row" style="gap:8px; flex-wrap:wrap;">';
+      for(var i=0;i<routes.length;i++){
+        body += '<button class="btn-ghost" data-dbg="' + escapeHtml(routes[i].path) + '">' + escapeHtml(routes[i].name) + "</button>";
+      }
+      body += "</div>";
+      body += '<div style="height:12px;"></div>';
+      body += '<textarea class="field mono" id="dbgOut" style="min-height:220px;" placeholder="Ответ появится здесь..."></textarea>';
+
       Modal.open({
         title: "Debug API",
-        body: \`
-          <div class="hint">Нажимайте, чтобы увидеть сырой ответ (удобно ловить несовпадение эндпоинтов).</div>
-          <div style="height:10px;"></div>
-          <div class="row" style="gap:8px; flex-wrap:wrap;">
-            \${routes.map(r => \`<button class="btn-ghost" data-dbg="\${escapeHtml(r.path)}">\${escapeHtml(r.name)}</button>\`).join("")}
-          </div>
-          <div style="height:12px;"></div>
-          <textarea class="field mono" id="dbgOut" style="min-height:220px;" placeholder="Ответ появится здесь…"></textarea>
-        \`,
-        buttons: [
-          { label:"Закрыть", kind:"ghost" },
-        ]
+        body: body,
+        buttons: [ { label:"Закрыть", kind:"ghost" } ]
       });
-      $("[data-dbg]")?.scrollIntoView?.({block:"nearest"});
 
-      $$("[data-dbg]").forEach(btn=>{
-        btn.addEventListener("click", async ()=>{
-          const path = btn.getAttribute("data-dbg");
-          const out = $("#dbgOut");
-          out.value = "Loading " + path + " …";
-          const r = await apiFetch(path, { method:"GET" });
-          out.value = JSON.stringify(r, null, 2);
+      $$( "[data-dbg]" ).forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var path = btn.getAttribute("data-dbg");
+          var out = $("#dbgOut");
+          out.value = "Loading " + path + " ...";
+          apiFetch(path, { method:"GET" }).then(function(r){
+            out.value = JSON.stringify(r, null, 2);
+          });
         });
       });
     }
 
-    // ---------- final init ----------
-    boot();
+    function prefetchForRoute(route){
+      if(route === "market" && state.listings.length === 0) return loadListings(true);
+      if(route === "wallet") return loadWalletAll();
+      if(route === "deals") return loadOrders();
+      if(route === "chat") return loadInbox(true);
+      return Promise.resolve();
+    }
 
-    // keep SSE alive while chats open
-    setInterval(()=>{ if(state.route === "chat" && state.me) startSSE(); }, 2500);
+    // Boot
+    function boot(){
+      initTheme();
+      state.route = getRouteFromHash();
+      syncNav();
+
+      $("#themeBtn").addEventListener("click", function(){
+        applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+      });
+      $("#brandHome").addEventListener("click", function(){ setRoute("market"); });
+      $("#mePill").addEventListener("click", function(){ setRoute("profile"); });
+      $("#debugBtn").addEventListener("click", function(){ openDebug(); });
+
+      $$(".nav-item").forEach(function(el){ el.addEventListener("click", function(){ setRoute(el.dataset.route); }); });
+      $$(".bni").forEach(function(el){ el.addEventListener("click", function(){ setRoute(el.dataset.route); }); });
+
+      render();
+
+      Promise.allSettled([ loadHealth(), loadMe(), loadCategories() ]).then(function(){
+        return prefetchForRoute(state.route);
+      }).then(function(){
+        var p = getPendingTopup();
+        if(p) toast("Ожидает платеж", "Откройте «Кошелек» -> «Проверить»", "warn", 4200);
+      });
+    }
+
+    boot();
+    setInterval(function(){ if(state.route === "chat" && state.me) startSSE(); }, 2500);
   </script>
 </body>
 </html>
