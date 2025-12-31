@@ -548,6 +548,14 @@ body:not(.logged-in) #profileShell .card{ filter: saturate(.98) }
 @media (prefers-reduced-motion: reduce){
   *{ animation:none !important; transition:none !important; scroll-behavior:auto !important }
 }
+/* === Auth/Profile visibility rules (hard) ===
+   - Logged OUT: show only login/register (no profile blocks)
+   - Logged IN: show only profile blocks (no login/register)
+*/
+body:not(.logged-in) #profileShell{ display:none !important; }
+body:not(.logged-in) #profileOnly{ display:none !important; }
+body.logged-in #authForms{ display:none !important; }
+body.logged-in #authOnly{ display:none !important; }
 </style>
 
 <style>
