@@ -1,1542 +1,1164 @@
+#!/usr/bin/env node
+/**
+ * OnlyMarket — MINIMAL WORKING BACKEND (CommonJS)
+ * ------------------------------------------------
+ * Goals:
+ *  - Starts on Node 18+ with "type":"module" in package.json (use .cjs)
+ *  - Does NOT delete/overwrite your existing data by default
+ *  - Tolerates JSON files stored as ARRAY or OBJECT (map)
+ *  - Supports legacy users format:
+ *      - new: { passwordHash: "scrypt$..." } or "sha256$..."
+ *      - old: { password: { salt, hash } } (pbkdf2/sha512 fallback)
+ *  - Core marketplace: users, listings, orders(deals), chat, wallet, audit
+ *  - Payments: CryptoBot Crypto Pay API only (create invoice + status + credit)
+ *
+ * ENV:
+ *   PORT=3000
+ *   CRYPTOPAY_TOKEN=...   // @CryptoBot -> Crypto Pay -> My Apps
+ *   BASE_URL=http://your-domain:3000  // optional for redirects / logs
+ *
+ * RUN:
+ *   node server.cjs
+ *
+ * NOTE:
+ *  - This file is intentionally verbose and commented (easy to extend).
+ */
 
-<!doctype html>
-<html lang="ru" data-theme="dark">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <title>OnlyMarket</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root{
-      --bg:#050812;
-      --panel: rgba(255,255,255,.06);
-      --panel2: rgba(255,255,255,.08);
-      --border: rgba(255,255,255,.10);
-      --fg: rgba(255,255,255,.92);
-      --muted: rgba(255,255,255,.60);
-      --muted2: rgba(255,255,255,.42);
-      --accent:#3b82f6;
-      --accent2:#8b5cf6;
-      --good:#34d399;
-      --warn:#fbbf24;
-      --bad:#fb7185;
-      --shadow: 0 18px 60px rgba(0,0,0,.55);
-      --r:18px;
-      --r2:24px;
-      --max:1240px;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+const express = require("express");
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
+
+let cookieParser;
+try { cookieParser = require("cookie-parser"); } catch { cookieParser = null; }
+
+let nanoid;
+try { ({ nanoid } = require("nanoid")); } catch {
+  nanoid = (n=12) => crypto.randomBytes(Math.ceil(n*0.75)).toString("base64url").slice(0,n);
+}
+
+const now = () => Date.now();
+
+/* ==============================
+   Paths / Directories
+============================== */
+const ROOT = __dirname; // ~/om/server
+const DATA_DIR = path.join(ROOT, "data");
+const BACKUP_DIR = path.join(DATA_DIR, "backups");
+const MEDIA_DIR = path.join(DATA_DIR, "media");
+
+// public directory: ../public (recommended) or ./public
+const PUBLIC_DIR_PRIMARY = path.join(ROOT, "..", "public");
+const PUBLIC_DIR_FALLBACK = path.join(ROOT, "public");
+const PUBLIC_DIR = fs.existsSync(PUBLIC_DIR_PRIMARY) ? PUBLIC_DIR_PRIMARY : PUBLIC_DIR_FALLBACK;
+
+for (const d of [DATA_DIR, BACKUP_DIR, MEDIA_DIR]) {
+  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+}
+
+/* ==============================
+   Safe JSON read/write
+============================== */
+
+/**
+ * Reads JSON file.
+ * - If missing and fallback is provided -> creates it (ONLY when file absent).
+ * - If parse error -> DOES NOT overwrite existing file, returns fallback.
+ */
+function readJSON(fileName, fallback) {
+  const fp = path.join(DATA_DIR, fileName);
+  if (!fs.existsSync(fp)) {
+    if (typeof fallback !== "undefined") {
+      try { fs.writeFileSync(fp, JSON.stringify(fallback, null, 2)); } catch {}
+      return fallback;
     }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0;
-      font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
-      background:
-        radial-gradient(1200px 600px at 20% 0%, rgba(59,130,246,.22), transparent 60%),
-        radial-gradient(900px 500px at 90% 20%, rgba(139,92,246,.16), transparent 55%),
-        radial-gradient(900px 500px at 40% 120%, rgba(52,211,153,.10), transparent 60%),
-        var(--bg);
-      color:var(--fg);
-      overflow-x:hidden;
-    }
-    a{color:inherit;text-decoration:none}
-    button,input,select,textarea{font:inherit;color:inherit;background:transparent;border:none;outline:none}
-    .wrap{min-height:100%;display:flex;justify-content:center;padding:22px 16px 60px}
-    .shell{width:100%;max-width:var(--max);display:grid;grid-template-columns:290px 1fr;gap:16px;align-items:start}
-    @media (max-width:980px){.shell{grid-template-columns:1fr}}
-
-    .side{
-      position:sticky;top:16px;
-      border-radius:var(--r2);
-      background:linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
-      border:1px solid var(--border);
-      box-shadow:var(--shadow);
-      overflow:hidden;
-    }
-    @media (max-width:980px){.side{position:relative;top:0}}
-    .brand{
-      padding:18px 18px 14px;
-      display:flex;gap:12px;align-items:center;
-      border-bottom:1px solid var(--border);
-      background:rgba(0,0,0,.10);
-    }
-    .logo{
-      width:40px;height:40px;border-radius:14px;
-      background:linear-gradient(135deg, rgba(59,130,246,.95), rgba(139,92,246,.92));
-      box-shadow:0 16px 40px rgba(59,130,246,.25);
-      position:relative;flex:0 0 auto;
-    }
-    .logo:after{
-      content:"";position:absolute;inset:9px;border-radius:12px;
-      background:rgba(0,0,0,.22);
-      border:1px solid rgba(255,255,255,.25);
-    }
-    .brand h1{margin:0;font-size:14px;letter-spacing:.3px}
-    .brand p{margin:4px 0 0;font-size:12px;color:var(--muted)}
-    .nav{padding:10px;display:flex;flex-direction:column;gap:6px}
-    .nav a{
-      display:flex;align-items:center;gap:10px;
-      padding:12px 12px;border-radius:14px;
-      color:rgba(255,255,255,.82);
-      border:1px solid transparent;
-      transition:.15s ease;
-    }
-    .nav a:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.08)}
-    .nav a.active{
-      background:linear-gradient(180deg, rgba(59,130,246,.18), rgba(139,92,246,.12));
-      border-color:rgba(59,130,246,.25);
-      color:rgba(255,255,255,.95);
-    }
-    .dot{width:9px;height:9px;border-radius:99px;background:rgba(255,255,255,.22)}
-    .active .dot{
-      background:linear-gradient(135deg, rgba(59,130,246,1), rgba(139,92,246,1));
-      box-shadow:0 0 0 4px rgba(59,130,246,.18);
-    }
-    .sideFooter{
-      padding:12px 14px 14px;border-top:1px solid var(--border);
-      display:flex;gap:10px;align-items:center;justify-content:space-between;
-      background:rgba(0,0,0,.08);
-    }
-    .pill{
-      padding:8px 10px;border-radius:999px;
-      border:1px solid rgba(255,255,255,.12);
-      background:rgba(255,255,255,.05);
-      font-size:12px;color:var(--muted);
-      max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-    }
-
-    .content{
-      border-radius:var(--r2);
-      border:1px solid var(--border);
-      background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
-      box-shadow:var(--shadow);
-      overflow:hidden;
-      min-height:640px;
-    }
-    .topbar{
-      padding:18px 18px 14px;
-      display:flex;align-items:center;justify-content:space-between;gap:12px;
-      border-bottom:1px solid var(--border);
-      background:rgba(0,0,0,.10);
-    }
-    .topbar h2{margin:0;font-size:16px;letter-spacing:.2px}
-    .topbar .sub{margin-top:6px;font-size:12px;color:var(--muted)}
-    .main{padding:18px}
-    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    @media (max-width:920px){.grid2{grid-template-columns:1fr}}
-    .card{
-      border-radius:var(--r);
-      border:1px solid rgba(255,255,255,.10);
-      background:rgba(255,255,255,.05);
-      padding:14px;
-    }
-    .card h3{margin:0;font-size:14px;color:rgba(255,255,255,.90)}
-    .card p{margin:8px 0 0;color:var(--muted);font-size:12.5px;line-height:1.5}
-    .muted{color:var(--muted)}
-    .mono{font-family:var(--mono)}
-    .btn{
-      cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:10px;
-      padding:10px 12px;border-radius:14px;
-      border:1px solid rgba(255,255,255,.12);
-      background:rgba(255,255,255,.06);
-      transition:.15s ease;user-select:none;white-space:nowrap;
-    }
-    .btn:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.18)}
-    .btn.primary{
-      background:linear-gradient(135deg, rgba(59,130,246,.95), rgba(139,92,246,.92));
-      border-color:rgba(59,130,246,.35);
-      box-shadow:0 16px 40px rgba(59,130,246,.20);
-    }
-    .btn.primary:hover{filter:brightness(1.05)}
-    .btn.danger{background:rgba(251,113,133,.14);border-color:rgba(251,113,133,.35)}
-    .btn.ghost{background:rgba(255,255,255,.03)}
-    .hidden{display:none !important}
-    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
-
-    .kpis{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-    .kpi{
-      padding:10px 12px;border-radius:14px;
-      border:1px solid rgba(255,255,255,.12);
-      background:rgba(0,0,0,.12);
-      min-width:160px;
-    }
-    .kpi .label{font-size:11px;color:var(--muted)}
-    .kpi .value{margin-top:6px;font-size:18px;font-weight:800;letter-spacing:.2px}
-    .kpi .value small{font-size:12px;font-weight:700;color:var(--muted)}
-
-    .field{display:flex;flex-direction:column;gap:6px;margin-top:12px}
-    .field label{font-size:12px;color:var(--muted)}
-    .input,.select,.textarea{
-      padding:12px 12px;border-radius:14px;
-      border:1px solid rgba(255,255,255,.12);
-      background:rgba(0,0,0,.14);
-    }
-    .textarea{min-height:88px;resize:vertical}
-    .input:focus,.select:focus,.textarea:focus{border-color:rgba(59,130,246,.55);box-shadow:0 0 0 6px rgba(59,130,246,.14)}
-
-    table{
-      width:100%;border-collapse:collapse;overflow:hidden;
-      border-radius:16px;border:1px solid rgba(255,255,255,.10);
-    }
-    th,td{
-      text-align:left;padding:12px 12px;font-size:12.5px;
-      border-bottom:1px solid rgba(255,255,255,.08);
-      vertical-align:top;
-    }
-    th{color:rgba(255,255,255,.72);font-weight:700;background:rgba(0,0,0,.16)}
-    tr:hover td{background:rgba(255,255,255,.04)}
-
-    .badge{
-      display:inline-flex;align-items:center;
-      padding:4px 8px;border-radius:999px;font-size:11px;
-      border:1px solid rgba(255,255,255,.14);
-      color:rgba(255,255,255,.78);
-      background:rgba(255,255,255,.06);
-      white-space:nowrap;
-    }
-    .badge.good{border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.12)}
-    .badge.bad{border-color:rgba(251,113,133,.35);background:rgba(251,113,133,.12)}
-    .badge.warn{border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.12)}
-
-    .backdrop{
-      position:fixed;inset:0;background:rgba(0,0,0,.60);
-      backdrop-filter:blur(10px);
-      display:none;align-items:center;justify-content:center;padding:18px;z-index:50;
-    }
-    .backdrop.show{display:flex}
-    .modal{
-      width:100%;max-width:900px;border-radius:22px;
-      border:1px solid rgba(255,255,255,.14);
-      background:rgba(10,12,20,.92);
-      box-shadow:0 30px 120px rgba(0,0,0,.7);
-      overflow:hidden;animation:pop .16s ease;
-    }
-    @keyframes pop{from{transform:translateY(6px) scale(.99);opacity:.7}to{transform:translateY(0) scale(1);opacity:1}}
-    .modalHead{
-      padding:16px 16px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;
-      border-bottom:1px solid rgba(255,255,255,.10);
-      background:rgba(0,0,0,.10);
-    }
-    .modalTitle{font-weight:800;letter-spacing:.2px}
-    .modalBody{padding:16px}
-    .iconBtn{
-      cursor:pointer;width:38px;height:38px;border-radius:14px;
-      border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);
-      display:flex;align-items:center;justify-content:center;transition:.15s ease;
-    }
-    .iconBtn:hover{background:rgba(255,255,255,.10)}
-    .x{width:14px;height:14px;border-right:2px solid rgba(255,255,255,.70);border-bottom:2px solid rgba(255,255,255,.70);transform:rotate(45deg);margin-left:2px}
-
-    .payGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
-    @media (max-width:740px){.payGrid{grid-template-columns:1fr}}
-    .payOpt{
-      cursor:pointer;border-radius:18px;border:1px solid rgba(255,255,255,.12);
-      background:rgba(255,255,255,.05);padding:14px;
-      display:flex;gap:12px;align-items:center;justify-content:space-between;transition:.15s ease;
-    }
-    .payOpt:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.20)}
-    .payOpt.active{border-color:rgba(59,130,246,.55);box-shadow:0 0 0 6px rgba(59,130,246,.14)}
-    .payLeft{display:flex;gap:12px;align-items:center}
-    .payLogo{
-      width:42px;height:42px;border-radius:14px;border:1px solid rgba(255,255,255,.12);
-      background:rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center;overflow:hidden;
-    }
-    .payLogo svg{width:22px;height:22px;opacity:.9}
-    .payMeta .name{font-weight:800}
-    .payMeta .desc{font-size:12px;color:var(--muted);margin-top:4px}
-
-    .chatBox{border-radius:18px;border:1px solid rgba(255,255,255,.10);background:rgba(0,0,0,.14);overflow:hidden}
-    .chatLog{padding:12px;max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:10px}
-    .msg{display:flex;flex-direction:column;gap:6px;max-width:88%}
-    .msg.me{align-self:flex-end}
-    .bubble{
-      border-radius:16px;padding:10px 12px;border:1px solid rgba(255,255,255,.10);
-      background:rgba(255,255,255,.06);line-height:1.35;font-size:13px;white-space:pre-wrap;word-break:break-word;
-    }
-    .msg.me .bubble{
-      background:linear-gradient(135deg, rgba(59,130,246,.22), rgba(139,92,246,.16));
-      border-color:rgba(59,130,246,.22);
-    }
-    .msgMeta{font-size:11px;color:var(--muted2);display:flex;gap:8px;align-items:center}
-    .chatSend{display:flex;gap:10px;padding:12px;border-top:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.10);align-items:flex-end}
-    .chatSend textarea{flex:1;min-height:44px;max-height:120px;resize:vertical}
-
-    .toastWrap{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:100;display:flex;flex-direction:column;gap:10px;pointer-events:none}
-    .toast{
-      pointer-events:auto;border-radius:16px;border:1px solid rgba(255,255,255,.14);
-      background:rgba(10,12,20,.92);padding:12px 12px;box-shadow:0 20px 80px rgba(0,0,0,.7);
-      min-width:280px;max-width:560px;animation:toast .18s ease;
-    }
-    @keyframes toast{from{transform:translateY(6px);opacity:.65}to{transform:translateY(0);opacity:1}}
-    .toast .t{font-weight:800}
-    .toast .m{margin-top:4px;color:var(--muted);font-size:12.5px;line-height:1.4}
-    .toast .mini{margin-top:8px;display:flex;justify-content:flex-end;gap:10px}
-    .mini .link{pointer-events:auto;cursor:pointer;color:rgba(255,255,255,.88);font-size:12px;text-decoration:underline;text-decoration-color:rgba(255,255,255,.25);text-underline-offset:3px}
-  </style>
-</head>
-<body>
-<div class="wrap">
-  <div class="shell">
-    <aside class="side">
-      <div class="brand">
-        <div class="logo"></div>
-        <div>
-          <h1>OnlyMarket</h1>
-          <p id="sideSub">Маркетплейс • сделки • чат • кошелёк</p>
-        </div>
-      </div>
-      <nav class="nav" id="nav">
-        <a href="#/home" data-route="home"><span class="dot"></span><span>Главная</span></a>
-        <a href="#/deals" data-route="deals" class="hidden" id="navDeals"><span class="dot"></span><span>Сделки</span></a>
-        <a href="#/profile" data-route="profile" class="hidden" id="navProfile"><span class="dot"></span><span>Кошелёк</span></a>
-        <a href="#/admin" data-route="admin" class="hidden" id="navAdmin"><span class="dot"></span><span>Админка</span></a>
-        <a href="#/auth" data-route="auth" id="navAuth"><span class="dot"></span><span>Войти</span></a>
-      </nav>
-      <div class="sideFooter">
-        <span class="pill" id="authPill">Гость</span>
-        <button class="btn danger hidden" id="logoutBtn">Выйти</button>
-      </div>
-    </aside>
-
-    <main class="content">
-      <div class="topbar">
-        <div>
-          <h2 id="title">Главная</h2>
-          <div class="sub" id="subtitle">Сделки, чат и кошелёк — всё в одном.</div>
-        </div>
-        <div style="display:flex;gap:10px;align-items:center;">
-          <button class="btn" id="refreshBtn">Обновить</button>
-          <button class="btn primary hidden" id="topupBtnTop">Пополнить</button>
-          <button class="btn primary hidden" id="newDealBtnTop">Новая сделка</button>
-        </div>
-      </div>
-
-      <div class="main">
-        <section id="view-home">
-          <div class="grid2">
-            <div class="card">
-              <h3>Быстрый обзор</h3>
-              <div class="kpis" id="homeKpis"></div>
-              <div class="actions" id="homeActions">
-                <a class="btn primary" href="#/auth" id="homeLoginBtn">Войти</a>
-                <a class="btn hidden" href="#/deals" id="homeDealsBtn">Открыть сделки</a>
-                <a class="btn hidden" href="#/profile" id="homeWalletBtn">Открыть кошелёк</a>
-              </div>
-              <p class="muted" id="homeHint" style="margin-top:10px;">Войдите, чтобы видеть сделки и баланс.</p>
-            </div>
-
-            <div class="card">
-              <h3>Как работает сделка</h3>
-              <p>
-                1) Создаёте сделку и указываете пользователя и сумму.<br>
-                2) Покупатель вносит деньги в сделку (из кошелька).<br>
-                3) Продавец отмечает доставку товара.<br>
-                4) Покупатель подтверждает — деньги переходят продавцу.
-              </p>
-              <div class="actions">
-                <button class="btn primary hidden" id="homeNewDealBtn">Создать сделку</button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="view-auth" class="hidden">
-          <div class="grid2">
-            <div class="card">
-              <h3>Вход</h3>
-              <div class="field">
-                <label>Email или username</label>
-                <input class="input" id="loginId" placeholder="email или username" autocomplete="username">
-              </div>
-              <div class="field">
-                <label>Пароль</label>
-                <input class="input" id="loginPw" type="password" placeholder="••••••••" autocomplete="current-password">
-              </div>
-              <div class="actions">
-                <button class="btn primary" id="loginBtn">Войти</button>
-                <button class="btn ghost" id="demoBtn">Демо</button>
-              </div>
-              <p class="muted" style="margin-top:10px;">Демо логин для первого запуска: <span class="mono">admin@onlymarket.local</span> / <span class="mono">admin12345</span></p>
-            </div>
-            <div class="card">
-              <h3>Регистрация</h3>
-              <div class="field">
-                <label>Email</label>
-                <input class="input" id="regEmail" placeholder="you@mail.com" autocomplete="email">
-              </div>
-              <div class="field">
-                <label>Username</label>
-                <input class="input" id="regUser" placeholder="nickname" autocomplete="username">
-              </div>
-              <div class="field">
-                <label>Пароль</label>
-                <input class="input" id="regPw" type="password" placeholder="минимум 8 символов" autocomplete="new-password">
-              </div>
-              <div class="actions">
-                <button class="btn primary" id="regBtn">Создать аккаунт</button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="view-deals" class="hidden">
-          <div class="card">
-            <h3>Сделки</h3>
-            <p class="muted">Клик по сделке → детали + чат + действия.</p>
-            <div class="actions">
-              <button class="btn primary" id="newDealBtn">Новая сделка</button>
-              <button class="btn" id="refreshDealsBtn">Обновить</button>
-            </div>
-
-            <div style="margin-top:12px; overflow:auto;">
-              <table>
-                <thead>
-                  <tr>
-                    <th style="width:170px;">ID</th>
-                    <th>Название</th>
-                    <th style="width:160px;">Сумма</th>
-                    <th style="width:140px;">Статус</th>
-                    <th style="width:220px;">Участники</th>
-                    <th style="width:190px;">Обновлено</th>
-                  </tr>
-                </thead>
-                <tbody id="dealsTbody"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <section id="view-profile" class="hidden">
-          <div class="card">
-            <h3>Кошелёк</h3>
-            <div class="kpis" id="balanceKpis"></div>
-            <div class="actions">
-              <button class="btn primary" id="topupBtn2">Пополнить</button>
-              <button class="btn" id="withdrawBtn">Вывести</button>
-              <button class="btn" id="logsBtn">Логи</button>
-            </div>
-          </div>
-
-          <div style="height:12px"></div>
-
-          <div class="grid2">
-            <div class="card">
-              <h3>Смена пароля</h3>
-              <div class="field">
-                <label>Текущий пароль</label>
-                <input class="input" id="oldPw" type="password" placeholder="••••••••" autocomplete="current-password">
-              </div>
-              <div class="field">
-                <label>Новый пароль</label>
-                <input class="input" id="newPw" type="password" placeholder="минимум 8 символов" autocomplete="new-password">
-              </div>
-              <div class="actions">
-                <button class="btn primary" id="changePwBtn">Сменить</button>
-              </div>
-            </div>
-
-            <div class="card">
-              <h3>Последние события</h3>
-              <p class="muted">10 последних действий (вход, сделки, операции кошелька).</p>
-              <div id="recentLogs"></div>
-            </div>
-          </div>
-        </section>
-
-        <section id="view-admin" class="hidden">
-          <div class="card">
-            <h3>Пользователи</h3>
-            <p class="muted">Клик → профиль пользователя (балансы, логи, сделки).</p>
-            <div class="field">
-              <label>Поиск</label>
-              <input class="input" id="userSearch" placeholder="email / username / id">
-            </div>
-            <div style="margin-top:12px; overflow:auto;">
-              <table>
-                <thead>
-                  <tr>
-                    <th style="width:260px;">Пользователь</th>
-                    <th style="width:140px;">Роль</th>
-                    <th style="width:140px;">Статус</th>
-                    <th>Создан</th>
-                  </tr>
-                </thead>
-                <tbody id="usersTbody"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <div style="height:12px"></div>
-
-          <div class="card">
-            <h3>Глобальные логи</h3>
-            <p class="muted">События системы (только для админов). Клик → детали.</p>
-            <div id="adminLogs"></div>
-          </div>
-        </section>
-      </div>
-    </main>
-  </div>
-</div>
-
-<div class="backdrop" id="topupModal">
-  <div class="modal">
-    <div class="modalHead">
-      <div class="modalTitle">Пополнение</div>
-      <button class="iconBtn" data-close="topupModal"><span class="x"></span></button>
-    </div>
-    <div class="modalBody">
-      <div class="grid2">
-        <div class="card">
-          <h3>Сумма</h3>
-          <div class="field">
-            <label>Сумма</label>
-            <input class="input" id="topupAmount" placeholder="Напр. 10" inputmode="decimal">
-          </div>
-          <div class="field">
-            <label>Валюта</label>
-            <select class="select" id="topupCurrency">
-              <option value="EUR">EUR</option>
-              <option value="USD">USD</option>
-              <option value="RUB">RUB</option>
-            </select>
-          </div>
-        </div>
-        <div class="card">
-          <h3>Способ оплаты</h3>
-          <div class="payGrid" id="payGrid">
-            <div class="payOpt active" data-kind="crypto">
-              <div class="payLeft">
-                <div class="payLogo" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l7.5 4.5v11L12 22l-7.5-4.5v-11L12 2z" stroke="currentColor" stroke-width="1.6"/><path d="M9.5 10.2c0-1.2.9-2.1 2.3-2.1h1.2c1.4 0 2.3.9 2.3 2.1 0 1.2-.9 2.1-2.3 2.1h-1.2c-1.4 0-2.3.9-2.3 2.1 0 1.2.9 2.1 2.3 2.1h1.2c1.4 0 2.3-.9 2.3-2.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                </div>
-                <div class="payMeta">
-                  <div class="name">Крипта</div>
-                  <div class="desc">Оплата криптовалютой</div>
-                </div>
-              </div>
-              <span class="badge">CRYPTO</span>
-            </div>
-
-            <div class="payOpt" data-kind="sbp">
-              <div class="payLeft">
-                <div class="payLogo" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none"><path d="M7 7h10v10H7V7z" stroke="currentColor" stroke-width="1.6"/><path d="M9 9h6v6H9V9z" stroke="currentColor" stroke-width="1.6"/><path d="M5 12h2M17 12h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                </div>
-                <div class="payMeta">
-                  <div class="name">СБП</div>
-                  <div class="desc">Перевод по QR (RUB)</div>
-                </div>
-              </div>
-              <span class="badge">RUB</span>
-            </div>
-
-            <div class="payOpt" data-kind="card" style="grid-column: 1 / -1;">
-              <div class="payLeft">
-                <div class="payLogo" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none"><path d="M4 7.5h16v9H4v-9z" stroke="currentColor" stroke-width="1.6"/><path d="M4 10h16" stroke="currentColor" stroke-width="1.6"/><path d="M7 14h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                </div>
-                <div class="payMeta">
-                  <div class="name">Карта</div>
-                  <div class="desc">Оплата банковской картой</div>
-                </div>
-              </div>
-              <span class="badge">CARD</span>
-            </div>
-          </div>
-
-          <div class="actions">
-            <button class="btn primary" id="createTopupBtn">Создать счёт</button>
-            <button class="btn" data-close="topupModal">Отмена</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="card hidden" id="invoiceCard" style="margin-top:12px;">
-        <h3>Счёт создан</h3>
-        <p id="invoiceText" class="muted"></p>
-        <div class="actions">
-          <a class="btn primary" id="payLink" target="_blank" rel="noopener">Перейти к оплате</a>
-          <button class="btn" id="checkInvoiceBtn">Проверить статус</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="backdrop" id="withdrawModal">
-  <div class="modal">
-    <div class="modalHead">
-      <div class="modalTitle">Вывод</div>
-      <button class="iconBtn" data-close="withdrawModal"><span class="x"></span></button>
-    </div>
-    <div class="modalBody">
-      <div class="grid2">
-        <div class="card">
-          <h3>Сумма</h3>
-          <div class="field">
-            <label>Валюта</label>
-            <select class="select" id="withdrawCurrency">
-              <option value="EUR">EUR</option>
-              <option value="USD">USD</option>
-              <option value="RUB">RUB</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Сумма</label>
-            <input class="input" id="withdrawAmount" placeholder="например 10" inputmode="decimal">
-          </div>
-        </div>
-        <div class="card">
-          <h3>Куда</h3>
-          <div class="field">
-            <label>Реквизиты / адрес</label>
-            <input class="input" id="withdrawDest" placeholder="карта / кошелёк / реквизиты">
-          </div>
-          <div class="field">
-            <label>Комментарий (опционально)</label>
-            <input class="input" id="withdrawNote" placeholder="например: вывод на карту">
-          </div>
-          <div class="actions">
-            <button class="btn primary" id="createWithdrawBtn">Создать заявку</button>
-            <button class="btn" data-close="withdrawModal">Отмена</button>
-          </div>
-          <p class="muted" style="margin-top:10px;">В шаблоне вывод создаётся со статусом <span class="mono">pending</span>.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="backdrop" id="newDealModal">
-  <div class="modal">
-    <div class="modalHead">
-      <div class="modalTitle">Новая сделка</div>
-      <button class="iconBtn" data-close="newDealModal"><span class="x"></span></button>
-    </div>
-    <div class="modalBody">
-      <div class="grid2">
-        <div class="card">
-          <h3>Параметры</h3>
-          <div class="field">
-            <label>Тип</label>
-            <select class="select" id="dealType">
-              <option value="buy">Я покупаю</option>
-              <option value="sell">Я продаю</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Пользователь (email или username)</label>
-            <input class="input" id="dealCounterparty" placeholder="username или email">
-          </div>
-          <div class="field">
-            <label>Название / что покупаем</label>
-            <input class="input" id="dealTitle" placeholder="например: 1000 gold, skin, аккаунт...">
-          </div>
-        </div>
-        <div class="card">
-          <h3>Сумма</h3>
-          <div class="field">
-            <label>Валюта</label>
-            <select class="select" id="dealCurrency">
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="RUB">RUB</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Сумма</label>
-            <input class="input" id="dealAmount" placeholder="например 10" inputmode="decimal">
-          </div>
-          <div class="field">
-            <label>Комментарий (опционально)</label>
-            <textarea class="textarea" id="dealNote" placeholder="детали: сроки, описание и т.д."></textarea>
-          </div>
-        </div>
-      </div>
-      <div class="actions">
-        <button class="btn primary" id="createDealBtn">Создать</button>
-        <button class="btn" data-close="newDealModal">Отмена</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="backdrop" id="dealModal">
-  <div class="modal">
-    <div class="modalHead">
-      <div class="modalTitle" id="dealModalTitle">Сделка</div>
-      <button class="iconBtn" data-close="dealModal"><span class="x"></span></button>
-    </div>
-    <div class="modalBody" id="dealModalBody"></div>
-  </div>
-</div>
-
-<div class="backdrop" id="logsModal">
-  <div class="modal">
-    <div class="modalHead">
-      <div class="modalTitle">Логи</div>
-      <button class="iconBtn" data-close="logsModal"><span class="x"></span></button>
-    </div>
-    <div class="modalBody">
-      <div id="logsTable"></div>
-    </div>
-  </div>
-</div>
-
-<div class="backdrop" id="logDetailModal">
-  <div class="modal">
-    <div class="modalHead">
-      <div class="modalTitle">Детали</div>
-      <button class="iconBtn" data-close="logDetailModal"><span class="x"></span></button>
-    </div>
-    <div class="modalBody">
-      <div class="card">
-        <h3 id="logDetailTitle">…</h3>
-        <p class="muted" id="logDetailMeta">…</p>
-        <pre class="mono" id="logDetailJson" style="white-space:pre-wrap;word-break:break-word;margin:12px 0 0;color:rgba(255,255,255,.86);"></pre>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="backdrop" id="adminUserModal">
-  <div class="modal">
-    <div class="modalHead">
-      <div class="modalTitle" id="adminUserTitle">Профиль пользователя</div>
-      <button class="iconBtn" data-close="adminUserModal"><span class="x"></span></button>
-    </div>
-    <div class="modalBody">
-      <div id="adminUserBody"></div>
-    </div>
-  </div>
-</div>
-
-<div class="toastWrap" id="toastWrap"></div>
-
-<script>
-  const $ = (q, el=document) => el.querySelector(q);
-  const $$ = (q, el=document) => Array.from(el.querySelectorAll(q));
-
-  function fmtTs(ts){
-    const d = new Date(ts);
-    return d.toLocaleString(undefined, { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    return null;
   }
-  function money(n){
-    const x = Number(n || 0);
-    return x.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const raw = fs.readFileSync(fp, "utf8");
+  if (!raw || !raw.trim()) return (typeof fallback !== "undefined") ? fallback : null;
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error("readJson failed:", fileName, String(e && e.message ? e.message : e));
+    return (typeof fallback !== "undefined") ? fallback : null;
   }
-  function escapeHtml(s){
-    return String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
-  function toast(title, msg, actions=[]){
-    const wrap = $("#toastWrap");
-    const el = document.createElement("div");
-    el.className = "toast";
-    el.innerHTML = `
-      <div class="t">${escapeHtml(title)}</div>
-      <div class="m">${escapeHtml(msg)}</div>
-      <div class="mini"></div>
-    `;
-    const mini = $(".mini", el);
-    actions.forEach(a => {
-      const b = document.createElement("span");
-      b.className = "link";
-      b.textContent = a.label;
-      b.onclick = () => { try{ a.onClick?.(); } finally { el.remove(); } };
-      mini.appendChild(b);
-    });
-    wrap.appendChild(el);
-    setTimeout(() => el.remove(), 6500);
-  }
+}
 
-  async function api(path, {method="GET", body, headers={}} = {}){
-    const res = await fetch(path, {
-      method,
-      headers: { "Content-Type":"application/json", ...headers },
-      credentials: "include",
-      body: body ? JSON.stringify(body) : undefined
-    });
-    const ct = res.headers.get("content-type") || "";
-    const data = ct.includes("application/json") ? await res.json().catch(() => ({})) : await res.text().catch(()=> "");
-    if(!res.ok){
-      const msg = (data && data.error) ? data.error : (typeof data === "string" ? data : "Request failed");
-      throw new Error(msg);
+function writeJSON(fileName, obj) {
+  const fp = path.join(DATA_DIR, fileName);
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  // backup best-effort
+  try {
+    const bak = path.join(BACKUP_DIR, `${fileName}.${stamp}.bak`);
+    fs.writeFileSync(bak, fs.readFileSync(fp));
+  } catch {}
+  // atomic write
+  const tmp = fp + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2));
+  fs.renameSync(tmp, fp);
+}
+
+/* ==============================
+   Shape helpers (array vs map)
+============================== */
+
+function isPlainObject(x) {
+  return !!x && typeof x === "object" && !Array.isArray(x);
+}
+
+function mapFromArray(arr, key = "id") {
+  const m = {};
+  for (const it of (Array.isArray(arr) ? arr : [])) {
+    if (!it) continue;
+    const k = it[key];
+    if (k) m[String(k)] = it;
+  }
+  return m;
+}
+
+function arrayFromMap(obj) {
+  if (!isPlainObject(obj)) return [];
+  return Object.values(obj);
+}
+
+/**
+ * Loads dataset preserving original shape:
+ * - if file contains array -> returns { shape:"array", arr, map }
+ * - if file contains object -> returns { shape:"map", arr, map }
+ * - if empty -> uses fallback shape from fallback argument
+ */
+function loadDataset(fileName, fallbackValue) {
+  const data = readJSON(fileName, fallbackValue);
+  if (Array.isArray(data)) {
+    return { shape: "array", arr: data, map: mapFromArray(data) };
+  }
+  if (isPlainObject(data)) {
+    return { shape: "map", arr: arrayFromMap(data), map: data };
+  }
+  // fallback
+  if (Array.isArray(fallbackValue)) {
+    return { shape: "array", arr: fallbackValue, map: mapFromArray(fallbackValue) };
+  }
+  if (isPlainObject(fallbackValue)) {
+    return { shape: "map", arr: arrayFromMap(fallbackValue), map: fallbackValue };
+  }
+  return { shape: "map", arr: [], map: {} };
+}
+
+function saveDataset(fileName, ds) {
+  if (!ds || !ds.shape) throw new Error("Bad dataset");
+  if (ds.shape === "array") return writeJSON(fileName, Array.isArray(ds.arr) ? ds.arr : []);
+  return writeJSON(fileName, isPlainObject(ds.map) ? ds.map : {});
+}
+
+/* ==============================
+   Security / Passwords
+============================== */
+
+// legacy from server.fixed.js: sha256$base64(password)
+function hashPwLegacy(p) {
+  return "sha256$" + Buffer.from(String(p)).toString("base64");
+}
+function checkLegacy(p, stored) {
+  return !!stored && String(stored).startsWith("sha256$") && hashPwLegacy(p) === stored;
+}
+
+// scrypt preferred (Node 18)
+function hashPw(p) {
+  const salt = crypto.randomBytes(16);
+  const key = crypto.scryptSync(String(p), salt, 64, { N: 16384, r: 8, p: 1 });
+  return "scrypt$" + salt.toString("hex") + "$" + key.toString("hex");
+}
+function checkPwScrypt(p, stored) {
+  try {
+    const parts = String(stored).split("$");
+    if (parts.length !== 3) return false;
+    const salt = Buffer.from(parts[1], "hex");
+    const keyHex = parts[2];
+    const key = crypto.scryptSync(String(p), salt, 64, { N: 16384, r: 8, p: 1 });
+    return crypto.timingSafeEqual(Buffer.from(keyHex, "hex"), key);
+  } catch {
+    return false;
+  }
+}
+
+// old users format: { password: { salt, hash } } (your current data sample)
+function checkPwOldObject(p, obj) {
+  if (!obj || !obj.salt || !obj.hash) return false;
+  const saltHex = String(obj.salt);
+  const hashHex = String(obj.hash);
+  const saltBuf = Buffer.from(saltHex, "hex");
+
+  // Try pbkdf2 variants first (most likely)
+  const tryPbkdf2 = (iters) => {
+    try {
+      const dkLen = Math.max(16, Math.floor(hashHex.length / 2));
+      const dk = crypto.pbkdf2Sync(String(p), saltBuf, iters, dkLen, "sha512");
+      return crypto.timingSafeEqual(Buffer.from(hashHex, "hex"), dk);
+    } catch { return false; }
+  };
+
+  if (tryPbkdf2(100000)) return true;
+  if (tryPbkdf2(50000)) return true;
+  if (tryPbkdf2(20000)) return true;
+  if (tryPbkdf2(10000)) return true;
+
+  // Fallback: sha512(salt+password) or sha512(password+salt)
+  const h1 = crypto.createHash("sha512").update(Buffer.concat([saltBuf, Buffer.from(String(p))])).digest("hex");
+  if (h1 === hashHex) return true;
+  const h2 = crypto.createHash("sha512").update(Buffer.concat([Buffer.from(String(p)), saltBuf])).digest("hex");
+  if (h2 === hashHex) return true;
+
+  return false;
+}
+
+function checkPwAny(p, stored) {
+  if (!stored) return false;
+
+  // scrypt$...
+  if (String(stored).startsWith("scrypt$")) return checkPwScrypt(p, stored);
+
+  // sha256$...
+  if (String(stored).startsWith("sha256$")) return checkLegacy(p, stored);
+
+  // object? (old)
+  if (typeof stored === "object") return checkPwOldObject(p, stored);
+
+  return false;
+}
+
+/* ==============================
+   Normalization helpers
+============================== */
+
+function normalizeUser(u) {
+  if (!u || typeof u !== "object") return null;
+
+  // Old schema (your sample):
+  // { id, email, username, password:{salt,hash}, role, isBanned }
+  // New schema:
+  // { id, email, nickname, passwordHash, roles, status }
+  const id = u.id ? String(u.id) : ("u_" + nanoid(10));
+
+  const email = u.email ? String(u.email) : "";
+  const nickname = (u.nickname || u.username || "").toString().trim() || email || id;
+
+  const roles = Array.isArray(u.roles) ? u.roles.slice() :
+    (u.role ? [String(u.role)] : ["user"]);
+
+  // status
+  let status = u.status ? String(u.status) : "active";
+  if (u.isBanned === true) status = "banned";
+  if (status !== "active" && status !== "banned") status = "active";
+
+  // passwordHash: prefer u.passwordHash, else u.password legacy object
+  const passwordHash =
+    u.passwordHash ? u.passwordHash :
+    (u.password ? u.password : null);
+
+  return {
+    ...u,
+    id,
+    email,
+    nickname,
+    roles,
+    status,
+    passwordHash, // may be string or {salt,hash}
+    createdAt: Number(u.createdAt || now()),
+    updatedAt: Number(u.updatedAt || u.createdAt || now()),
+  };
+}
+
+function userPublic(u) {
+  const nu = normalizeUser(u);
+  if (!nu) return null;
+  return {
+    id: nu.id,
+    nickname: nu.nickname,
+    roles: (nu.roles || []).includes("admin") ? ["admin"] : [],
+    status: nu.status,
+    createdAt: nu.createdAt,
+  };
+}
+
+function isAdmin(u) {
+  const nu = normalizeUser(u);
+  if (!nu) return false;
+  const roles = nu.roles || [];
+  return roles.includes("admin") || roles.includes("support");
+}
+
+/* ==============================
+   Audit (logs)
+============================== */
+
+function auditPush(entry) {
+  const ds = loadDataset("audit.json", []);
+  const arr = ds.arr || [];
+  arr.push({
+    id: "a_" + nanoid(10),
+    ts: now(),
+    ...entry,
+  });
+  // keep last 50k
+  if (arr.length > 50000) arr.splice(0, arr.length - 50000);
+  ds.arr = arr;
+  ds.map = mapFromArray(arr);
+  ds.shape = "array";
+  saveDataset("audit.json", ds);
+}
+
+function auditAction(req, action, targetType, targetId, meta = {}) {
+  const actor = req.user ? normalizeUser(req.user) : null;
+  auditPush({
+    actorId: actor ? actor.id : null,
+    actorNick: actor ? actor.nickname : null,
+    actorRoles: actor ? actor.roles : [],
+    action: String(action),
+    targetType: targetType ? String(targetType) : null,
+    targetId: targetId ? String(targetId) : null,
+    ip: req.ip,
+    ua: (req.headers["user-agent"] || "").slice(0, 200),
+    meta,
+  });
+}
+
+/* ==============================
+   Sessions / Auth middleware
+============================== */
+
+function sessionsRead() { return readJSON("sessions.json", {}); }
+function sessionsWrite(o) { writeJSON("sessions.json", o || {}); }
+
+function createSession(userId) {
+  const token = "s_" + nanoid(32);
+  const sessions = sessionsRead();
+  sessions[token] = {
+    id: token,
+    userId: String(userId),
+    createdAt: now(),
+    expiresAt: now() + 30 * 24 * 3600 * 1000, // 30 days
+  };
+  sessionsWrite(sessions);
+  return token;
+}
+
+function deleteSession(token) {
+  if (!token) return;
+  const sessions = sessionsRead();
+  if (sessions[token]) {
+    delete sessions[token];
+    sessionsWrite(sessions);
+  }
+}
+
+function loadUsersDS() {
+  // users.json in your folder currently can be ARRAY (sample) or MAP
+  return loadDataset("users.json", []);
+}
+
+function findUserByEmail(usersArr, email) {
+  const e = String(email || "").trim().toLowerCase();
+  return (usersArr || []).map(normalizeUser).find(u => (u.email || "").toLowerCase() === e) || null;
+}
+
+function findUserById(usersMap, id) {
+  const u = usersMap[String(id)];
+  return u ? normalizeUser(u) : null;
+}
+
+function writeUsersDS(ds) {
+  // Important: preserve shape (array vs map)
+  // But ensure stored values include normalized fields.
+  if (ds.shape === "array") {
+    ds.arr = (ds.arr || []).map(normalizeUser).filter(Boolean);
+    ds.map = mapFromArray(ds.arr);
+  } else {
+    const out = {};
+    for (const [_, u] of Object.entries(ds.map || {})) {
+      const nu = normalizeUser(u);
+      if (nu) out[String(nu.id)] = nu;
     }
-    return data;
+    ds.map = out;
+    ds.arr = arrayFromMap(out);
   }
+  saveDataset("users.json", ds);
+}
 
-  const state = { me:null, balances:null, deals:[], invoice:null, payKind:"crypto", adminUsers:[] };
+function authMiddleware(req, res, next) {
+  const header = String(req.headers.authorization || "");
+  const bearer = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  const token = (req.cookies && req.cookies.token) || bearer || "";
 
-  const routes = ["home","auth","profile","deals","admin"];
-  function setRoute(route){ if(!routes.includes(route)) route="home"; location.hash = "#/" + route; }
-  function getRoute(){ const m = (location.hash || "").match(/^#\\/([a-z]+)/i); return m ? m[1] : "home"; }
-  function renderRoute(){
-    const r = getRoute();
-    $("#title").textContent =
-      r === "home" ? "Главная" :
-      r === "auth" ? "Войти" :
-      r === "deals" ? "Сделки" :
-      r === "profile" ? "Кошелёк" : "Админка";
-    $("#subtitle").textContent =
-      r === "home" ? "Сделки, чат и кошелёк — всё в одном." :
-      r === "auth" ? "Вход / регистрация" :
-      r === "deals" ? "Список сделок и чат по каждой сделке" :
-      r === "profile" ? "Баланс, пополнение, вывод и безопасность" :
-      "Пользователи и системные логи";
+  if (!token) return next();
 
-    $$("#nav a").forEach(a => a.classList.toggle("active", a.dataset.route === r));
-    $("#view-home").classList.toggle("hidden", r !== "home");
-    $("#view-auth").classList.toggle("hidden", r !== "auth");
-    $("#view-deals").classList.toggle("hidden", r !== "deals");
-    $("#view-profile").classList.toggle("hidden", r !== "profile");
-    $("#view-admin").classList.toggle("hidden", r !== "admin");
+  const sessions = sessionsRead();
+  const s = sessions[token];
+  if (!s || Number(s.expiresAt || 0) < now()) return next();
 
-    if((r === "profile" || r === "deals") && !state.me) setRoute("auth");
-    if(r === "admin" && !(state.me && state.me.role === "admin")) setRoute("home");
-  }
-  window.addEventListener("hashchange", renderRoute);
+  const usersDS = loadUsersDS();
+  const u = findUserById(usersDS.map, s.userId);
+  if (!u || u.status === "banned") return next();
 
-  function openModal(id){ $("#"+id).classList.add("show"); }
-  function closeModal(id){ $("#"+id).classList.remove("show"); }
-  $$(".backdrop").forEach(b => b.addEventListener("click", (e) => { if(e.target === b) b.classList.remove("show"); }));
-  $$("[data-close]").forEach(btn => btn.addEventListener("click", () => closeModal(btn.dataset.close)));
+  req.user = u;
+  req.session = s;
+  req.token = token;
+  return next();
+}
 
-  async function refreshHomeKpis(){
-    const box = $("#homeKpis");
-    box.innerHTML = "";
-    if(!state.me){
-      box.innerHTML = `
-        <div class="kpi"><div class="label">Статус</div><div class="value">Гость <small>•</small></div></div>
-        <div class="kpi"><div class="label">Сделок</div><div class="value">— <small>•</small></div></div>
-      `;
-      return;
+function requireAuth(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: "UNAUTH" });
+  next();
+}
+function requireAdmin(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: "UNAUTH" });
+  if (!isAdmin(req.user)) return res.status(403).json({ error: "FORBIDDEN" });
+  next();
+}
+
+/* ==============================
+   Wallet / balances
+============================== */
+
+function balancesReadDS() {
+  return loadDataset("balances.json", {});
+}
+function balancesWriteDS(ds) {
+  // balances are usually map by userId -> { available, hold, history[] }
+  if (ds.shape === "array") {
+    // array of { userId, available, hold, history }
+    ds.arr = Array.isArray(ds.arr) ? ds.arr : [];
+    ds.map = {};
+    for (const it of ds.arr) {
+      if (!it) continue;
+      const uid = it.userId || it.id;
+      if (!uid) continue;
+      ds.map[String(uid)] = it;
     }
-    const dealsCount = (state.deals || []).length;
-    box.innerHTML = `
-      <div class="kpi"><div class="label">Аккаунт</div><div class="value">${escapeHtml(state.me.username)} <small>${escapeHtml(state.me.role)}</small></div></div>
-      <div class="kpi"><div class="label">Сделок</div><div class="value">${dealsCount} <small>всего</small></div></div>
-    `;
+    ds.shape = "map"; // normalize to map
+  } else {
+    ds.map = isPlainObject(ds.map) ? ds.map : {};
   }
+  writeJSON("balances.json", ds.map);
+}
 
-  async function refreshMe(){
-    try{ state.me = await api("/api/me"); }catch{ state.me = null; }
-    const authed = !!state.me;
+function getBalance(userId) {
+  const ds = balancesReadDS();
+  const b = ds.map[String(userId)] || { available: 0, hold: 0, history: [] };
+  b.available = Number(b.available || 0);
+  b.hold = Number(b.hold || 0);
+  b.history = Array.isArray(b.history) ? b.history : [];
+  return { ds, b };
+}
 
-    $("#authPill").textContent = authed ? (state.me.username + (state.me.role === "admin" ? " • admin" : "")) : "Гость";
-    $("#logoutBtn").classList.toggle("hidden", !authed);
+function putBalance(ds, userId, b) {
+  ds.map[String(userId)] = b;
+  balancesWriteDS(ds);
+}
 
-    $("#navAuth").classList.toggle("hidden", authed);
-    $("#navDeals").classList.toggle("hidden", !authed);
-    $("#navProfile").classList.toggle("hidden", !authed);
-    $("#navAdmin").classList.toggle("hidden", !(authed && state.me.role === "admin"));
+/* ==============================
+   Listings
+============================== */
 
-    $("#topupBtnTop").classList.toggle("hidden", !authed);
-    $("#newDealBtnTop").classList.toggle("hidden", !authed);
-
-    $("#homeLoginBtn").classList.toggle("hidden", authed);
-    $("#homeDealsBtn").classList.toggle("hidden", !authed);
-    $("#homeWalletBtn").classList.toggle("hidden", !authed);
-    $("#homeNewDealBtn").classList.toggle("hidden", !authed);
-    $("#homeHint").textContent = authed ? "Откройте сделки или кошелёк." : "Войдите, чтобы видеть сделки и баланс.";
-
-    if(authed){
-      await loadDeals().catch(()=>{});
-      await loadBalances().catch(()=>{});
-      await loadRecentLogs().catch(()=>{});
-      if(state.me.role === "admin"){
-        await loadUsers().catch(()=>{});
-        await loadAdminLogs().catch(()=>{});
-      }
-    }else{
-      state.balances = null;
-      state.deals = [];
-      $("#balanceKpis").innerHTML = "";
-      $("#dealsTbody").innerHTML = "";
-      $("#recentLogs").innerHTML = "";
-      $("#usersTbody").innerHTML = "";
-      $("#adminLogs").innerHTML = "";
-    }
-    await refreshHomeKpis();
-    renderRoute();
+function listingsReadDS() {
+  // can be {} or []
+  return loadDataset("listings.json", {});
+}
+function listingsWriteDS(ds) {
+  if (ds.shape === "array") {
+    ds.arr = (ds.arr || []).filter(Boolean);
+    ds.map = mapFromArray(ds.arr);
+    saveDataset("listings.json", ds);
+  } else {
+    ds.map = ds.map || {};
+    saveDataset("listings.json", ds);
   }
+}
+function listingPublic(l) {
+  if (!l) return null;
+  return {
+    id: l.id,
+    title: l.title,
+    description: l.description,
+    price: Number(l.price || 0),
+    currency: l.currency || "RUB",
+    categoryId: l.categoryId || null,
+    sellerId: l.sellerId,
+    status: l.status || "active",
+    createdAt: l.createdAt,
+    updatedAt: l.updatedAt,
+    images: Array.isArray(l.images) ? l.images : [],
+  };
+}
 
-  $("#refreshBtn").addEventListener("click", refreshMe);
+/* ==============================
+   Orders / Deals
+============================== */
 
-  $("#loginBtn").addEventListener("click", async () => {
-    try{
-      const emailOrUsername = $("#loginId").value.trim();
-      const password = $("#loginPw").value;
-      if(!emailOrUsername || !password) return toast("Ошибка", "Заполни логин и пароль");
-      await api("/api/auth/login", { method:"POST", body:{ emailOrUsername, password }});
-      toast("Готово", "Ты вошёл");
-      setRoute("deals");
-      await refreshMe();
-    }catch(e){ toast("Не получилось", e.message); }
+function ordersReadDS() {
+  return loadDataset("orders.json", {});
+}
+function ordersWriteDS(ds) {
+  if (ds.shape === "array") {
+    ds.arr = (ds.arr || []).filter(Boolean);
+    ds.map = mapFromArray(ds.arr);
+    saveDataset("orders.json", ds);
+  } else {
+    ds.map = ds.map || {};
+    saveDataset("orders.json", ds);
+  }
+}
+function orderRoom(orderId) { return "order:" + String(orderId); }
+
+function orderPublicFor(u, o) {
+  // For buyer/seller/admin
+  const me = u ? normalizeUser(u) : null;
+  const isParticipant = me && (String(o.buyerId) === me.id || String(o.sellerId) === me.id);
+  const admin = me && isAdmin(me);
+
+  if (!admin && !isParticipant) return null;
+
+  return {
+    id: o.id,
+    listingId: o.listingId,
+    title: o.title,
+    price: Number(o.price || 0),
+    currency: o.currency || "RUB",
+    buyerId: o.buyerId,
+    sellerId: o.sellerId,
+    status: o.status, // created, paid(escrow), delivered, completed, disputed, canceled
+    createdAt: o.createdAt,
+    updatedAt: o.updatedAt,
+    deliveredAt: o.deliveredAt || null,
+    completedAt: o.completedAt || null,
+  };
+}
+
+/* ==============================
+   Chat (messages)
+============================== */
+
+function messagesReadDS() {
+  // messages.json can be array or map; we normalize to array
+  return loadDataset("messages.json", []);
+}
+function messagesWriteDS(ds) {
+  ds.shape = "array";
+  ds.arr = Array.isArray(ds.arr) ? ds.arr : [];
+  // cap to last 200k (keep disk sane)
+  if (ds.arr.length > 200000) ds.arr.splice(0, ds.arr.length - 200000);
+  saveDataset("messages.json", ds);
+}
+
+function canAccessRoom(user, room) {
+  const u = normalizeUser(user);
+  if (!u) return false;
+  if (isAdmin(u)) return true;
+
+  // order chat: only buyer/seller
+  if (String(room).startsWith("order:")) {
+    const orderId = String(room).slice("order:".length);
+    const ordersDS = ordersReadDS();
+    const o = ordersDS.map[orderId] || null;
+    if (!o) return false;
+    return String(o.buyerId) === u.id || String(o.sellerId) === u.id;
+  }
+  return false;
+}
+
+/* ==============================
+   CryptoBot (Crypto Pay API)
+============================== */
+
+const CRYPTOPAY_TOKEN = process.env.CRYPTOPAY_TOKEN || process.env.CRYPTOPAY_API_TOKEN || "470975:AA3MglvYwqXBSMTaMbeJQ5ZlfJHmlaFZ0Gx";
+function cryptoHeaders() {
+  return {
+    "Content-Type": "application/json",
+    "Crypto-Pay-API-Token": CRYPTOPAY_TOKEN
+  };
+}
+
+async function ensureFetch() {
+  if (typeof fetch === "function") return fetch;
+  // Node <18 fallback
+  const mod = await import("node-fetch");
+  return mod.default || mod;
+}
+
+function topupsReadDS() { return loadDataset("topups.json", {}); }
+function topupsWriteDS(ds) { saveDataset("topups.json", ds); }
+
+/* ==============================
+   Express App
+============================== */
+
+const app = express();
+app.set("trust proxy", true);
+
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+if (cookieParser) app.use(cookieParser());
+
+// Attach auth
+app.use(authMiddleware);
+
+// Static
+if (fs.existsSync(PUBLIC_DIR)) {
+  app.use(express.static(PUBLIC_DIR, { extensions: ["html"] }));
+}
+
+// Health
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true, name: "OnlyMarket", time: now() });
+});
+
+/* ==============================
+   AUTH
+============================== */
+
+app.post("/api/auth/register", (req, res) => {
+  const { email, password, nickname } = req.body || {};
+  const em = String(email || "").trim();
+  const pw = String(password || "");
+  const nn = String(nickname || "").trim();
+
+  if (!em || !pw || nn.length < 2) return res.status(400).json({ error: "VALIDATION" });
+
+  const usersDS = loadUsersDS();
+  const usersArr = usersDS.arr.map(normalizeUser);
+
+  if (findUserByEmail(usersArr, em)) return res.status(400).json({ error: "EMAIL_EXISTS" });
+  if (usersArr.some(u => String(u.nickname || "").toLowerCase() === nn.toLowerCase()))
+    return res.status(400).json({ error: "NICK_EXISTS" });
+
+  const id = "u_" + nanoid(18);
+  const user = normalizeUser({
+    id,
+    email: em,
+    nickname: nn,
+    roles: ["user"],
+    status: "active",
+    passwordHash: hashPw(pw),
+    createdAt: now(),
+    updatedAt: now(),
   });
 
-  $("#regBtn").addEventListener("click", async () => {
-    try{
-      const email = $("#regEmail").value.trim();
-      const username = $("#regUser").value.trim();
-      const password = $("#regPw").value;
-      if(!email || !username || !password) return toast("Ошибка", "Заполни email, username и пароль");
-      await api("/api/auth/register", { method:"POST", body:{ email, username, password }});
-      toast("Аккаунт создан", "Ты зарегистрирован и вошёл");
-      setRoute("deals");
-      await refreshMe();
-    }catch(e){ toast("Не получилось", e.message); }
-  });
+  if (usersDS.shape === "array") {
+    usersDS.arr.push(user);
+    usersDS.map[user.id] = user;
+  } else {
+    usersDS.map[user.id] = user;
+    usersDS.arr.push(user);
+  }
 
-  $("#demoBtn").addEventListener("click", () => {
-    $("#loginId").value = "admin@onlymarket.local";
-    $("#loginPw").value = "admin12345";
-    toast("Демо", "Если база пустая — демо-админ создаётся автоматически. Нажми “Войти”.");
-  });
+  writeUsersDS(usersDS);
 
-  $("#logoutBtn").addEventListener("click", async () => {
-    try{
-      await api("/api/auth/logout", { method:"POST" });
-      toast("Ок", "Ты вышел");
-      setRoute("home");
-      await refreshMe();
-    }catch(e){ toast("Ошибка", e.message); }
-  });
+  // create empty balance
+  const { ds: bds, b } = getBalance(user.id);
+  if (!bds.map[user.id]) {
+    bds.map[user.id] = { available: 0, hold: 0, history: [] };
+    balancesWriteDS(bds);
+  }
 
-  async function loadBalances(){
-    const bal = await api("/api/wallet/balances");
-    state.balances = bal.balances || {};
-    const kpis = $("#balanceKpis");
-    kpis.innerHTML = "";
-    const entries = Object.entries(state.balances);
-    if(!entries.length){
-      kpis.innerHTML = `<div class="kpi"><div class="label">Баланс</div><div class="value">0.00 <small>USD</small></div></div>`;
-      return;
+  const token = createSession(user.id);
+  res.cookie("token", token, { httpOnly: false, sameSite: "lax" });
+
+  auditAction(req, "auth.register", "user", user.id, { email: user.email });
+  res.json({ ok: true, user: userPublic(user), token });
+});
+
+app.post("/api/auth/login", (req, res) => {
+  const { email, password } = req.body || {};
+  const em = String(email || "").trim();
+  const pw = String(password || "");
+  if (!em || !pw) return res.status(400).json({ error: "VALIDATION" });
+
+  const usersDS = loadUsersDS();
+  const usersArr = usersDS.arr.map(normalizeUser);
+  const u = findUserByEmail(usersArr, em);
+  if (!u) return res.status(400).json({ error: "BAD_CREDENTIALS" });
+  if (u.status === "banned") return res.status(403).json({ error: "BANNED" });
+
+  if (!checkPwAny(pw, u.passwordHash)) return res.status(400).json({ error: "BAD_CREDENTIALS" });
+
+  const token = createSession(u.id);
+  res.cookie("token", token, { httpOnly: false, sameSite: "lax" });
+
+  auditAction(req, "auth.login", "user", u.id, {});
+  res.json({ ok: true, user: userPublic(u), token });
+});
+
+app.post("/api/auth/logout", requireAuth, (req, res) => {
+  deleteSession(req.token);
+  res.clearCookie("token");
+  auditAction(req, "auth.logout", "user", req.user.id, {});
+  res.json({ ok: true });
+});
+
+app.get("/api/me", (req, res) => {
+  if (!req.user) return res.json({ user: null });
+  const u = normalizeUser(req.user);
+  res.json({ user: { ...userPublic(u), email: u.email, roles: u.roles } });
+});
+
+app.post("/api/auth/change-password", requireAuth, (req, res) => {
+  const { oldPassword, newPassword } = req.body || {};
+  const oldPw = String(oldPassword || "");
+  const newPw = String(newPassword || "");
+  if (newPw.length < 6) return res.status(400).json({ error: "WEAK_PASSWORD" });
+
+  const usersDS = loadUsersDS();
+  const u = findUserById(usersDS.map, req.user.id);
+  if (!u) return res.status(404).json({ error: "NO_USER" });
+
+  if (u.passwordHash && !checkPwAny(oldPw, u.passwordHash))
+    return res.status(400).json({ error: "BAD_OLD_PASSWORD" });
+
+  u.passwordHash = hashPw(newPw);
+  u.updatedAt = now();
+
+  usersDS.map[u.id] = u;
+  if (usersDS.shape === "array") {
+    const idx = usersDS.arr.findIndex(x => String(x.id) === u.id);
+    if (idx !== -1) usersDS.arr[idx] = u;
+    else usersDS.arr.push(u);
+  }
+  writeUsersDS(usersDS);
+
+  auditAction(req, "auth.change_password", "user", u.id, {});
+  res.json({ ok: true });
+});
+
+/* ==============================
+   USERS (public / lookup)
+============================== */
+
+app.get("/api/users/:id/public", (req, res) => {
+  const usersDS = loadUsersDS();
+  const u = findUserById(usersDS.map, req.params.id);
+  if (!u) return res.status(404).json({ error: "NOT_FOUND" });
+  res.json({ user: userPublic(u) });
+});
+
+app.get("/api/users/lookup", (req, res) => {
+  const ids = String(req.query.ids || "")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean)
+    .slice(0, 200);
+
+  const usersDS = loadUsersDS();
+  const out = ids.map(id => {
+    const u = usersDS.map[id];
+    return u ? userPublic(u) : { id, nickname: id, roles: [], status: "unknown", createdAt: null };
+  });
+  res.json(out);
+});
+
+/* ==============================
+   ADMIN: user overview + audit
+============================== */
+
+app.get("/api/admin/users", requireAdmin, (req, res) => {
+  const q = String(req.query.q || "").trim().toLowerCase();
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit || 50)));
+
+  const usersDS = loadUsersDS();
+  let arr = usersDS.arr.map(normalizeUser).filter(Boolean);
+
+  if (q) {
+    arr = arr.filter(u =>
+      (u.email || "").toLowerCase().includes(q) ||
+      (u.nickname || "").toLowerCase().includes(q) ||
+      (u.id || "").toLowerCase().includes(q)
+    );
+  }
+  arr = arr
+    .sort((a,b)=> (b.createdAt||0)-(a.createdAt||0))
+    .slice(0, limit)
+    .map(u => ({ ...userPublic(u), email: u.email, roles: u.roles }));
+
+  res.json({ users: arr });
+});
+
+app.get("/api/admin/users/:id/overview", requireAdmin, (req, res) => {
+  const userId = String(req.params.id);
+  const usersDS = loadUsersDS();
+  const u = findUserById(usersDS.map, userId);
+  if (!u) return res.status(404).json({ error: "NOT_FOUND" });
+
+  const { b } = getBalance(userId);
+
+  const history = Array.isArray(b.history) ? b.history.slice(-200).reverse() : [];
+
+  const ordersDS = ordersReadDS();
+  const allOrders = Object.values(ordersDS.map || {}).filter(Boolean);
+  const asBuyer = allOrders.filter(o => String(o.buyerId) === userId);
+  const asSeller = allOrders.filter(o => String(o.sellerId) === userId);
+
+  const auditDS = loadDataset("audit.json", []);
+  const aud = (auditDS.arr || [])
+    .filter(x => String(x.actorId || "") === userId || String(x.targetId || "") === userId)
+    .slice(-300)
+    .reverse();
+
+  res.json({
+    user: { ...userPublic(u), email: u.email, roles: u.roles },
+    balance: { available: b.available, hold: b.hold },
+    walletHistory: history,
+    orders: {
+      buyerCount: asBuyer.length,
+      sellerCount: asSeller.length,
+      lastBuyer: asBuyer.slice(-20).reverse(),
+      lastSeller: asSeller.slice(-20).reverse(),
+    },
+    audit: aud,
+  });
+});
+
+/* ==============================
+   CATEGORIES
+============================== */
+
+app.get("/api/categories", (req, res) => {
+  const cats = readJSON("categories.json", []);
+  res.json(Array.isArray(cats) ? cats : []);
+});
+
+/* ==============================
+   LISTINGS
+============================== */
+
+app.get("/api/listings", (req, res) => {
+  const q = String(req.query.q || "").trim().toLowerCase();
+  const categoryId = String(req.query.categoryId || "").trim();
+  const status = String(req.query.status || "active").trim();
+
+  const ds = listingsReadDS();
+  let arr = ds.shape === "array" ? (ds.arr || []) : Object.values(ds.map || {});
+  arr = arr.filter(Boolean);
+
+  if (status) arr = arr.filter(l => String(l.status || "active") === status);
+  if (categoryId) arr = arr.filter(l => String(l.categoryId || "") === categoryId);
+  if (q) arr = arr.filter(l =>
+    String(l.title || "").toLowerCase().includes(q) ||
+    String(l.description || "").toLowerCase().includes(q)
+  );
+
+  const me = req.user ? normalizeUser(req.user) : null;
+  if (!me || !isAdmin(me)) arr = arr.filter(l => String(l.status || "active") !== "disabled");
+
+  arr.sort((a,b)=> Number(b.createdAt||0)-Number(a.createdAt||0));
+  res.json({ listings: arr.slice(0, 200).map(listingPublic) });
+});
+
+app.post("/api/listings", requireAuth, (req, res) => {
+  const me = normalizeUser(req.user);
+  const { title, description, price, currency = "RUB", categoryId = null, images = [] } = req.body || {};
+  const t = String(title || "").trim();
+  const d = String(description || "").trim();
+  const p = Number(price || 0);
+
+  if (t.length < 2 || d.length < 2 || !(p > 0)) return res.status(400).json({ error: "VALIDATION" });
+
+  const ds = listingsReadDS();
+  const id = "l_" + nanoid(12);
+  const item = {
+    id,
+    title: t,
+    description: d,
+    price: +p.toFixed(2),
+    currency: String(currency || "RUB"),
+    categoryId: categoryId ? String(categoryId) : null,
+    sellerId: me.id,
+    status: "active",
+    images: Array.isArray(images) ? images.slice(0, 8) : [],
+    createdAt: now(),
+    updatedAt: now(),
+  };
+
+  if (ds.shape === "array") {
+    ds.arr.push(item);
+    ds.map[item.id] = item;
+  } else {
+    ds.map[item.id] = item;
+  }
+  listingsWriteDS(ds);
+
+  auditAction(req, "listing.create", "listing", item.id, { price: item.price, currency: item.currency });
+  res.json({ ok: true, listing: listingPublic(item) });
+});
+
+/* ==============================
+   WALLET
+============================== */
+
+app.get("/api/wallet", requireAuth, (req, res) => {
+  const u = normalizeUser(req.user);
+  const { b } = getBalance(u.id);
+  res.json({
+    balance: { available: b.available, hold: b.hold },
+    history: (Array.isArray(b.history) ? b.history.slice(-100).reverse() : []),
+  });
+});
+
+/* ==============================
+   ORDERS / DEALS (escrow minimum)
+============================== */
+
+app.post("/api/orders/create", requireAuth, (req, res) => {
+  const me = normalizeUser(req.user);
+  const { listingId } = req.body || {};
+  const lid = String(listingId || "");
+  if (!lid) return res.status(400).json({ error: "VALIDATION" });
+
+  const lds = listingsReadDS();
+  const l = lds.map[lid] || null;
+  if (!l) return res.status(404).json({ error: "LISTING_NOT_FOUND" });
+  if (String(l.status || "active") !== "active") return res.status(400).json({ error: "LISTING_INACTIVE" });
+  if (String(l.sellerId) === me.id) return res.status(400).json({ error: "CANT_BUY_OWN" });
+
+  const price = Number(l.price || 0);
+  if (!(price > 0)) return res.status(400).json({ error: "BAD_PRICE" });
+
+  const { ds: bds, b } = getBalance(me.id);
+  if (b.available < price) return res.status(400).json({ error: "INSUFFICIENT_BALANCE" });
+
+  b.available -= price;
+  b.hold += price;
+  b.history.push({ id: "h_" + nanoid(10), type: "escrow_hold", amount: -price, listingId: lid, ts: now() });
+  putBalance(bds, me.id, b);
+
+  const ods = ordersReadDS();
+  const id = "o_" + nanoid(12);
+
+  const o = {
+    id,
+    listingId: lid,
+    title: String(l.title || "").slice(0, 160),
+    price: +price.toFixed(2),
+    currency: l.currency || "RUB",
+    buyerId: me.id,
+    sellerId: String(l.sellerId),
+    status: "paid",
+    createdAt: now(),
+    updatedAt: now(),
+  };
+
+  if (ods.shape === "array") {
+    ods.arr.push(o); ods.map[o.id] = o;
+  } else {
+    ods.map[o.id] = o;
+  }
+  ordersWriteDS(ods);
+
+  const mds = messagesReadDS();
+  mds.arr.push({
+    id: "m_" + nanoid(12),
+    room: orderRoom(o.id),
+    senderId: null,
+    text: "Системное: сделка создана и средства удержаны в escrow.",
+    ts: now(),
+    type: "system",
+  });
+  messagesWriteDS(mds);
+
+  auditAction(req, "order.create", "order", o.id, { listingId: lid, price });
+  res.json({ ok: true, order: orderPublicFor(me, o), room: orderRoom(o.id) });
+});
+
+/* ==============================
+   CHAT
+============================== */
+
+app.get("/api/chat/room", requireAuth, (req, res) => {
+  const room = String(req.query.room || "").trim();
+  if (!room) return res.status(400).json({ error: "VALIDATION" });
+  if (!canAccessRoom(req.user, room)) return res.status(403).json({ error: "FORBIDDEN" });
+
+  const ds = messagesReadDS();
+  const msgs = (ds.arr || []).filter(m => String(m.room) === room).slice(-200);
+  res.json({ room, messages: msgs });
+});
+
+app.post("/api/chat/send", requireAuth, (req, res) => {
+  const room = String((req.body||{}).room || "").trim();
+  const text = String((req.body||{}).text || "").trim();
+  if (!room || !text) return res.status(400).json({ error: "VALIDATION" });
+  if (text.length > 5000) return res.status(400).json({ error: "TOO_LONG" });
+  if (!canAccessRoom(req.user, room)) return res.status(403).json({ error: "FORBIDDEN" });
+
+  const me = normalizeUser(req.user);
+  const ds = messagesReadDS();
+  const msg = {
+    id: "m_" + nanoid(12),
+    room,
+    senderId: me.id,
+    text,
+    ts: now(),
+    type: "text",
+  };
+  ds.arr.push(msg);
+  messagesWriteDS(ds);
+
+  auditAction(req, "chat.send", "room", room, { len: text.length });
+  res.json({ ok: true, message: msg });
+});
+
+/* ==============================
+   CRYPTOBOT TOPUPS
+============================== */
+
+app.post("/api/pay/cryptobot/create", requireAuth, async (req, res) => {
+  try {
+    if (!CRYPTOPAY_TOKEN) return res.status(400).json({ error: "CRYPTOBOT_NOT_CONFIGURED" });
+
+    const { amount, fiat = "RUB", accepted_assets = "USDT,TON,BTC,ETH" } = req.body || {};
+    const amt = Number(amount || 0);
+    if (!Number.isFinite(amt) || amt <= 0) return res.status(400).json({ error: "VALIDATION" });
+
+    const payload = {
+      currency_type: "fiat",
+      fiat: String(fiat || "RUB"),
+      amount: String(amt),
+      accepted_assets: String(accepted_assets || "USDT,TON"),
+      description: "Пополнение баланса OnlyMarket",
+      allow_comments: false,
+      allow_anonymous: true,
+      expires_in: 600,
+    };
+
+    const _fetch = await ensureFetch();
+    const r = await _fetch("https://pay.crypt.bot/api/createInvoice", {
+      method: "POST",
+      headers: cryptoHeaders(),
+      body: JSON.stringify(payload),
+    });
+    const j = await r.json().catch(() => null);
+    if (!j || !j.ok) throw new Error((j && j.error) || "cryptobot error");
+
+    const inv = j.result;
+    const invoiceId = "cb_" + inv.invoice_id;
+    const payUrl = inv.bot_invoice_url;
+
+    const topups = topupsReadDS();
+    const u = normalizeUser(req.user);
+
+    const rec = {
+      id: invoiceId,
+      provider: "CRYPTOBOT",
+      userId: u.id,
+      amount: amt,
+      currency: String(fiat || "RUB"),
+      status: inv.status || "active",
+      credited: false,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+
+    if (topups.shape === "array") {
+      topups.arr.push(rec); topups.map[rec.id] = rec;
+    } else {
+      topups.map[rec.id] = rec;
     }
-    entries.forEach(([cur, val]) => {
-      const div = document.createElement("div");
-      div.className = "kpi";
-      div.innerHTML = `<div class="label">${escapeHtml(cur)}</div><div class="value">${money(val)} <small>${escapeHtml(cur)}</small></div>`;
-      kpis.appendChild(div);
+    topupsWriteDS(topups);
+
+    auditAction(req, "wallet.topup_create", "topup", invoiceId, { amount: amt, fiat });
+    res.json({ ok: true, invoiceId, payUrl });
+  } catch (e) {
+    console.error("cryptobot/create fail", e);
+    res.status(500).json({ error: "REQUEST_FAIL" });
+  }
+});
+
+app.get("/api/pay/cryptobot/status", requireAuth, async (req, res) => {
+  try {
+    if (!CRYPTOPAY_TOKEN) return res.json({ status: "pending", error: "CRYPTOBOT_NOT_CONFIGURED" });
+
+    const invoiceId = String(req.query.invoiceId || "").trim();
+    if (!invoiceId) return res.status(400).json({ error: "VALIDATION" });
+
+    const topups = topupsReadDS();
+    const tp = topups.map[invoiceId] || null;
+    if (!tp) return res.status(404).json({ error: "NOT_FOUND" });
+
+    const me = normalizeUser(req.user);
+    if (!isAdmin(me) && String(tp.userId) !== me.id) return res.status(403).json({ error: "FORBIDDEN" });
+
+    const invNum = invoiceId.replace(/^cb_/, "");
+    const _fetch = await ensureFetch();
+    const r = await _fetch("https://pay.crypt.bot/api/getInvoices?invoice_ids=" + encodeURIComponent(invNum), {
+      headers: { "Crypto-Pay-API-Token": CRYPTOPAY_TOKEN }
     });
-  }
+    const j = await r.json().catch(() => null);
+    if (!j || !j.ok) throw new Error((j && j.error) || "getInvoices failed");
 
-  function resetTopup(){
-    $("#invoiceCard").classList.add("hidden");
-    state.invoice = null;
-    $("#topupAmount").value = "";
-    state.payKind = "crypto";
-    $$("#payGrid .payOpt").forEach(el => el.classList.toggle("active", el.dataset.kind === "crypto"));
-  }
+    const inv = (j.result || [])[0];
+    if (!inv) return res.json({ status: "pending", rawStatus: "not_found" });
 
-  $("#topupBtnTop").addEventListener("click", () => { resetTopup(); openModal("topupModal"); });
-  $("#topupBtn2").addEventListener("click", () => $("#topupBtnTop").click());
+    const paid = inv.status === "paid";
 
-  $$("#payGrid .payOpt").forEach(el => {
-    el.addEventListener("click", () => {
-      state.payKind = el.dataset.kind;
-      $$("#payGrid .payOpt").forEach(x => x.classList.toggle("active", x === el));
-      if(state.payKind === "sbp") $("#topupCurrency").value = "RUB";
-    });
-  });
+    if (paid && !tp.credited) {
+      const { ds: bds, b } = getBalance(tp.userId);
+      const add = +Number(tp.amount || 0);
 
-  function mapPay(kind){
-    if(kind === "crypto") return { provider:"cryptobot", method:"crypto" };
-    if(kind === "sbp") return { provider:"platega", method:"sbp" };
-    return { provider:"platega", method:"card" };
-  }
-
-  $("#createTopupBtn").addEventListener("click", async () => {
-    try{
-      const amount = Number(String($("#topupAmount").value).replace(",", "."));
-      const currency = $("#topupCurrency").value;
-      if(!(amount > 0)) return toast("Ошибка", "Сумма должна быть больше 0");
-      if(state.payKind === "sbp" && currency !== "RUB") return toast("Ошибка", "СБП работает только с RUB");
-
-      const pm = mapPay(state.payKind);
-      const inv = await api("/api/wallet/topup/create", { method:"POST", body: { amount, currency, ...pm }});
-      state.invoice = inv;
-
-      $("#invoiceText").textContent = `ID: ${inv.id} • ${money(inv.amount)} ${inv.currency}`;
-      $("#payLink").href = inv.payUrl;
-      $("#invoiceCard").classList.remove("hidden");
-      toast("Счёт создан", "Открой оплату, затем нажми “Проверить статус”.");
-    }catch(e){ toast("Ошибка", e.message); }
-  });
-
-  $("#checkInvoiceBtn").addEventListener("click", async () => {
-    try{
-      if(!state.invoice) return;
-      const st = await api("/api/wallet/topup/status?id=" + encodeURIComponent(state.invoice.id));
-      if(st.status === "paid"){
-        toast("Оплачено", "Баланс обновлён");
-        closeModal("topupModal");
-        await loadBalances();
-        await loadRecentLogs();
-      }else{
-        toast("Пока не оплачено", "Статус: " + st.status);
-      }
-    }catch(e){ toast("Ошибка", e.message); }
-  });
-
-  $("#withdrawBtn").addEventListener("click", () => {
-    $("#withdrawAmount").value = "";
-    $("#withdrawDest").value = "";
-    $("#withdrawNote").value = "";
-    openModal("withdrawModal");
-  });
-
-  $("#createWithdrawBtn").addEventListener("click", async () => {
-    try{
-      const currency = $("#withdrawCurrency").value;
-      const amount = Number(String($("#withdrawAmount").value).replace(",", "."));
-      const destination = ($("#withdrawDest").value || "").trim();
-      const note = ($("#withdrawNote").value || "").trim();
-      if(!(amount > 0)) return toast("Ошибка", "Некорректная сумма");
-      if(!destination) return toast("Ошибка", "Укажи реквизиты");
-      const r = await api("/api/wallet/withdraw", { method:"POST", body:{ currency, amount, destination, note }});
-      toast("Заявка создана", "Статус: " + r.status + " • ID: " + r.id);
-      closeModal("withdrawModal");
-      await loadBalances();
-      await loadRecentLogs();
-    }catch(e){ toast("Ошибка", e.message); }
-  });
-
-  async function loadRecentLogs(){
-    const res = await api("/api/logs/me?limit=10");
-    const box = $("#recentLogs");
-    const items = res.items || [];
-    if(!items.length){ box.innerHTML = `<p class="muted">Пока пусто.</p>`; return; }
-    const table = document.createElement("table");
-    table.innerHTML = `<thead><tr><th style="width:190px;">Время</th><th style="width:220px;">Тип</th><th>Описание</th></tr></thead><tbody></tbody>`;
-    const tb = table.querySelector("tbody");
-    items.forEach(it => {
-      const tr = document.createElement("tr");
-      tr.style.cursor="pointer";
-      tr.innerHTML = `<td class="mono">${escapeHtml(fmtTs(it.ts))}</td><td><span class="badge">${escapeHtml(it.type)}</span></td><td class="muted">${escapeHtml(it.summary || "")}</td>`;
-      tr.addEventListener("click", () => showLogDetail(it));
-      tb.appendChild(tr);
-    });
-    box.innerHTML = "";
-    box.appendChild(table);
-  }
-
-  $("#logsBtn").addEventListener("click", async () => {
-    try{
-      const res = await api("/api/logs/me?limit=250");
-      renderLogsModal(res.items || []);
-      openModal("logsModal");
-    }catch(e){ toast("Ошибка", e.message); }
-  });
-
-  function renderLogsModal(items){
-    const box = $("#logsTable");
-    if(!items.length){ box.innerHTML = `<p class="muted">Пока пусто.</p>`; return; }
-    const table = document.createElement("table");
-    table.innerHTML = `<thead><tr><th style="width:190px;">Время</th><th style="width:220px;">Тип</th><th>Детали</th></tr></thead><tbody></tbody>`;
-    const tb = table.querySelector("tbody");
-    items.forEach(it => {
-      const tr = document.createElement("tr");
-      tr.style.cursor="pointer";
-      tr.innerHTML = `<td class="mono">${escapeHtml(fmtTs(it.ts))}</td><td><span class="badge">${escapeHtml(it.type)}</span></td><td class="muted">${escapeHtml(it.summary || "")}</td>`;
-      tr.addEventListener("click", () => showLogDetail(it));
-      tb.appendChild(tr);
-    });
-    box.innerHTML = "";
-    box.appendChild(table);
-  }
-
-  function showLogDetail(it){
-    $("#logDetailTitle").textContent = it.type;
-    $("#logDetailMeta").textContent = `${fmtTs(it.ts)} • actor: ${it.actorId || "-"} • target: ${it.targetUserId || "-"}`;
-    $("#logDetailJson").textContent = JSON.stringify(it, null, 2);
-    openModal("logDetailModal");
-  }
-
-  $("#changePwBtn").addEventListener("click", async () => {
-    try{
-      const oldPassword = $("#oldPw").value;
-      const newPassword = $("#newPw").value;
-      if(!oldPassword || !newPassword) return toast("Ошибка", "Заполни оба поля");
-      await api("/api/security/change-password", { method:"POST", body:{ oldPassword, newPassword }});
-      $("#oldPw").value = "";
-      $("#newPw").value = "";
-      toast("Готово", "Пароль обновлён");
-      await loadRecentLogs();
-    }catch(e){ toast("Ошибка", e.message); }
-  });
-
-  async function loadDeals(){
-    const res = await api("/api/deals");
-    state.deals = res.items || [];
-    renderDealsTable();
-    await refreshHomeKpis();
-  }
-
-  function statusBadge(st){
-    const s = String(st || "created");
-    if(s === "created") return `<span class="badge">created</span>`;
-    if(s === "funded") return `<span class="badge warn">funded</span>`;
-    if(s === "delivered") return `<span class="badge warn">delivered</span>`;
-    if(s === "completed") return `<span class="badge good">completed</span>`;
-    if(s === "canceled") return `<span class="badge bad">canceled</span>`;
-    if(s === "disputed") return `<span class="badge bad">disputed</span>`;
-    return `<span class="badge">${escapeHtml(s)}</span>`;
-  }
-
-  function renderDealsTable(){
-    const tb = $("#dealsTbody");
-    tb.innerHTML = "";
-    const items = state.deals || [];
-    if(!items.length){
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td colspan="6" class="muted">Сделок пока нет.</td>`;
-      tb.appendChild(tr);
-      return;
-    }
-    items.forEach(d => {
-      const tr = document.createElement("tr");
-      tr.style.cursor="pointer";
-      tr.innerHTML = `
-        <td class="mono">${escapeHtml(d.id)}</td>
-        <td><div style="font-weight:800">${escapeHtml(d.title || "Сделка")}</div><div class="muted" style="margin-top:4px;">${escapeHtml(d.note || "")}</div></td>
-        <td class="mono">${money(d.amount)} ${escapeHtml(d.currency)}</td>
-        <td>${statusBadge(d.status)}</td>
-        <td class="muted">${escapeHtml(d.buyerUsername)} ↔ ${escapeHtml(d.sellerUsername)}</td>
-        <td class="mono muted">${escapeHtml(fmtTs(d.updatedAt))}</td>
-      `;
-      tr.addEventListener("click", () => openDeal(d.id));
-      tb.appendChild(tr);
-    });
-  }
-
-  $("#refreshDealsBtn").addEventListener("click", async () => {
-    try{ await loadDeals(); toast("Ок", "Сделки обновлены"); }catch(e){ toast("Ошибка", e.message); }
-  });
-
-  function openNewDeal(){
-    $("#dealType").value = "buy";
-    $("#dealCounterparty").value = "";
-    $("#dealTitle").value = "";
-    $("#dealCurrency").value = "USD";
-    $("#dealAmount").value = "";
-    $("#dealNote").value = "";
-    openModal("newDealModal");
-  }
-  $("#newDealBtn").addEventListener("click", openNewDeal);
-  $("#newDealBtnTop").addEventListener("click", openNewDeal);
-  $("#homeNewDealBtn").addEventListener("click", openNewDeal);
-
-  $("#createDealBtn").addEventListener("click", async () => {
-    try{
-      const type = $("#dealType").value;
-      const counterparty = $("#dealCounterparty").value.trim();
-      const title = $("#dealTitle").value.trim();
-      const currency = $("#dealCurrency").value;
-      const amount = Number(String($("#dealAmount").value).replace(",", "."));
-      const note = $("#dealNote").value.trim();
-      if(!counterparty) return toast("Ошибка", "Укажи пользователя");
-      if(!title) return toast("Ошибка", "Укажи название");
-      if(!(amount > 0)) return toast("Ошибка", "Некорректная сумма");
-      await api("/api/deals", { method:"POST", body:{ type, counterparty, title, currency, amount, note }});
-      closeModal("newDealModal");
-      toast("Сделка создана", "Открой и продолжай");
-      await loadDeals();
-      setRoute("deals");
-    }catch(e){ toast("Ошибка", e.message); }
-  });
-
-  async function openDeal(id){
-    try{
-      const deal = await api("/api/deals/" + encodeURIComponent(id));
-      renderDealModal(deal);
-      openModal("dealModal");
-      await refreshDealMessages(id);
-    }catch(e){ toast("Ошибка", e.message); }
-  }
-
-  function renderDealModal(data){
-    const d = data.deal;
-    $("#dealModalTitle").textContent = `Сделка • ${d.id}`;
-    const meId = state.me?.id;
-    const isBuyer = meId === d.buyerId;
-    const isSeller = meId === d.sellerId;
-
-    const canFund = isBuyer && d.status === "created";
-    const canMarkDelivered = isSeller && d.status === "funded";
-    const canConfirm = isBuyer && d.status === "delivered";
-    const canCancel = (isBuyer || isSeller) && d.status === "created";
-    const canDispute = (isBuyer || isSeller) && (d.status === "funded" || d.status === "delivered");
-
-    const esc = d.escrow || { amount: 0, currency: d.currency, funded: false };
-
-    const body = document.createElement("div");
-    body.innerHTML = `
-      <div class="grid2">
-        <div class="card">
-          <h3>Детали</h3>
-          <p class="muted">
-            <span class="badge">${escapeHtml(d.status)}</span>
-            <span class="mono" style="margin-left:8px;">${escapeHtml(fmtTs(d.createdAt))}</span>
-          </p>
-          <div style="height:10px"></div>
-          <div class="kpis">
-            <div class="kpi"><div class="label">Сумма</div><div class="value">${money(d.amount)} <small>${escapeHtml(d.currency)}</small></div></div>
-            <div class="kpi"><div class="label">Эскроу</div><div class="value">${money(esc.amount || 0)} <small>${escapeHtml(esc.currency || d.currency)}</small></div></div>
-          </div>
-          <p style="margin-top:10px;"><b>${escapeHtml(d.title)}</b></p>
-          ${d.note ? `<p class="muted">${escapeHtml(d.note)}</p>` : `<p class="muted">Без комментариев.</p>`}
-          <p class="muted" style="margin-top:10px;">
-            Покупатель: <b>${escapeHtml(d.buyerUsername)}</b><br>
-            Продавец: <b>${escapeHtml(d.sellerUsername)}</b>
-          </p>
-
-          <div class="actions">
-            <button class="btn primary ${canFund ? "" : "hidden"}" id="dealFundBtn">Внести деньги в сделку</button>
-            <button class="btn primary ${canMarkDelivered ? "" : "hidden"}" id="dealDeliverBtn">Отметить доставку</button>
-            <button class="btn primary ${canConfirm ? "" : "hidden"}" id="dealConfirmBtn">Подтвердить получение</button>
-
-            <button class="btn danger ${canDispute ? "" : "hidden"}" id="dealDisputeBtn">Открыть спор</button>
-            <button class="btn danger ${canCancel ? "" : "hidden"}" id="dealCancelBtn">Отменить</button>
-          </div>
-
-          <p class="muted" style="margin-top:10px;">
-            Внести деньги можно только из кошелька. Если денег не хватает — пополни.
-          </p>
-        </div>
-
-        <div class="card">
-          <h3>Чат по сделке</h3>
-          <p class="muted">Все сообщения сохраняются.</p>
-
-          <div class="chatBox" style="margin-top:10px;">
-            <div class="chatLog" id="chatLog"></div>
-            <div class="chatSend">
-              <textarea class="textarea" id="chatText" placeholder="Сообщение..."></textarea>
-              <button class="btn primary" id="chatSendBtn">Отправить</button>
-            </div>
-          </div>
-
-          <div class="actions">
-            <button class="btn" id="chatRefreshBtn">Обновить чат</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    $("#dealModalBody").innerHTML = "";
-    $("#dealModalBody").appendChild(body);
-
-    const wire = (btnId, fn) => { const el = $("#"+btnId); if(el) el.onclick = fn; };
-
-    wire("dealFundBtn", async () => {
-      try{
-        await api(`/api/deals/${encodeURIComponent(d.id)}/fund`, { method:"POST" });
-        toast("Готово", "Деньги внесены в сделку");
-        await loadBalances();
-        await loadDeals();
-        await openDeal(d.id);
-      }catch(e){
-        toast("Ошибка", e.message, [{ label:"Пополнить", onClick:()=> $("#topupBtnTop").click() }]);
-      }
-    });
-
-    wire("dealDeliverBtn", async () => {
-      try{
-        await api(`/api/deals/${encodeURIComponent(d.id)}/mark-delivered`, { method:"POST" });
-        toast("Ок", "Доставка отмечена");
-        await loadDeals();
-        await openDeal(d.id);
-      }catch(e){ toast("Ошибка", e.message); }
-    });
-
-    wire("dealConfirmBtn", async () => {
-      try{
-        await api(`/api/deals/${encodeURIComponent(d.id)}/confirm`, { method:"POST" });
-        toast("Завершено", "Сделка закрыта, деньги переведены");
-        await loadBalances();
-        await loadDeals();
-        await openDeal(d.id);
-      }catch(e){ toast("Ошибка", e.message); }
-    });
-
-    wire("dealCancelBtn", async () => {
-      try{
-        await api(`/api/deals/${encodeURIComponent(d.id)}/cancel`, { method:"POST" });
-        toast("Ок", "Сделка отменена");
-        await loadDeals();
-        await openDeal(d.id);
-      }catch(e){ toast("Ошибка", e.message); }
-    });
-
-    wire("dealDisputeBtn", async () => {
-      try{
-        await api(`/api/deals/${encodeURIComponent(d.id)}/dispute`, { method:"POST" });
-        toast("Спор", "Спор открыт");
-        await loadDeals();
-        await openDeal(d.id);
-      }catch(e){ toast("Ошибка", e.message); }
-    });
-
-    wire("chatSendBtn", async () => {
-      const text = ($("#chatText").value || "").trim();
-      if(!text) return;
-      $("#chatText").value = "";
-      try{
-        await api(`/api/deals/${encodeURIComponent(d.id)}/messages`, { method:"POST", body:{ text }});
-        await refreshDealMessages(d.id);
-      }catch(e){ toast("Ошибка", e.message); }
-    });
-
-    wire("chatRefreshBtn", async () => refreshDealMessages(d.id));
-  }
-
-  async function refreshDealMessages(dealId){
-    const res = await api(`/api/deals/${encodeURIComponent(dealId)}/messages?limit=120`);
-    const items = res.items || [];
-    const box = $("#chatLog");
-    if(!box) return;
-    box.innerHTML = "";
-    if(!items.length){ box.innerHTML = `<p class="muted">Сообщений нет.</p>`; return; }
-    items.reverse().forEach(m => {
-      const isMe = state.me && m.userId === state.me.id;
-      const div = document.createElement("div");
-      div.className = "msg " + (isMe ? "me" : "");
-      div.innerHTML = `
-        <div class="bubble">${escapeHtml(m.text)}</div>
-        <div class="msgMeta">
-          <span>${escapeHtml(m.username || "user")}</span>
-          <span class="mono">${escapeHtml(fmtTs(m.ts))}</span>
-        </div>
-      `;
-      box.appendChild(div);
-    });
-    box.scrollTop = box.scrollHeight;
-  }
-
-  async function loadUsers(){
-    const res = await api("/api/admin/users");
-    state.adminUsers = res.items || [];
-    renderUsers();
-  }
-  function renderUsers(){
-    const q = ($("#userSearch").value || "").trim().toLowerCase();
-    const items = (state.adminUsers || []).filter(u => {
-      if(!q) return true;
-      return [u.id,u.email,u.username].some(x => String(x||"").toLowerCase().includes(q));
-    });
-    const tb = $("#usersTbody");
-    tb.innerHTML = "";
-    items.forEach(u => {
-      const tr = document.createElement("tr");
-      tr.style.cursor="pointer";
-      const st = u.isBanned ? `<span class="badge bad">banned</span>` : `<span class="badge good">active</span>`;
-      tr.innerHTML = `
-        <td>
-          <div style="font-weight:800;">${escapeHtml(u.username)}</div>
-          <div class="muted mono" style="margin-top:4px;">${escapeHtml(u.email)} • ${escapeHtml(u.id)}</div>
-        </td>
-        <td><span class="badge">${escapeHtml(u.role)}</span></td>
-        <td>${st}</td>
-        <td class="mono">${escapeHtml(fmtTs(u.createdAt))}</td>
-      `;
-      tr.addEventListener("click", () => openAdminUser(u.id));
-      tb.appendChild(tr);
-    });
-    if(!items.length){
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td colspan="4" class="muted">Ничего не найдено.</td>`;
-      tb.appendChild(tr);
-    }
-  }
-  $("#userSearch").addEventListener("input", renderUsers);
-
-  async function openAdminUser(userId){
-    const prof = await api("/api/admin/users/" + encodeURIComponent(userId));
-    const logs = await api("/api/admin/users/" + encodeURIComponent(userId) + "/logs?limit=200");
-    const deals = await api("/api/admin/users/" + encodeURIComponent(userId) + "/deals?limit=200");
-
-    $("#adminUserTitle").textContent = `Профиль: ${prof.user.username}`;
-    const balances = prof.balances || {};
-    const balHtml = Object.entries(balances).map(([k,v]) => `
-      <div class="kpi"><div class="label">${escapeHtml(k)}</div><div class="value">${money(v)} <small>${escapeHtml(k)}</small></div></div>
-    `).join("") || `<p class="muted">Баланс пуст.</p>`;
-
-    const isBanned = !!prof.user.isBanned;
-
-    const body = document.createElement("div");
-    body.innerHTML = `
-      <div class="card">
-        <h3>Данные</h3>
-        <p class="muted mono">id: ${escapeHtml(prof.user.id)}<br>email: ${escapeHtml(prof.user.email)}<br>created: ${escapeHtml(fmtTs(prof.user.createdAt))}</p>
-        <div class="actions">
-          <button class="btn ${isBanned ? "" : "danger"}" id="banToggleBtn">${isBanned ? "Разбанить" : "Забанить"}</button>
-          <button class="btn" id="makeUserBtn">Роль: user</button>
-          <button class="btn" id="makeAdminBtn">Роль: admin</button>
-        </div>
-      </div>
-
-      <div style="height:12px"></div>
-
-      <div class="card">
-        <h3>Балансы</h3>
-        <div class="kpis">${balHtml}</div>
-        <div class="grid2" style="margin-top:12px;">
-          <div>
-            <div class="field">
-              <label>Валюта</label>
-              <select class="select" id="adjCur">
-                <option value="EUR">EUR</option>
-                <option value="USD">USD</option>
-                <option value="RUB">RUB</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <div class="field">
-              <label>Сумма (delta)</label>
-              <input class="input" id="adjDelta" placeholder="например 10 или -5" inputmode="decimal">
-            </div>
-          </div>
-        </div>
-        <div class="field">
-          <label>Причина</label>
-          <input class="input" id="adjReason" placeholder="коротко: компенсация / корректировка / …">
-        </div>
-        <div class="actions">
-          <button class="btn primary" id="adjBtn">Применить</button>
-        </div>
-      </div>
-
-      <div style="height:12px"></div>
-
-      <div class="card">
-        <h3>Сделки пользователя</h3>
-        <p class="muted">Клик → открыть сделку.</p>
-        <div id="adminUserDeals"></div>
-      </div>
-
-      <div style="height:12px"></div>
-
-      <div class="card">
-        <h3>Логи пользователя</h3>
-        <p class="muted">Клик → детали.</p>
-        <div id="adminUserLogs"></div>
-      </div>
-    `;
-
-    $("#adminUserBody").innerHTML = "";
-    $("#adminUserBody").appendChild(body);
-
-    const dItems = deals.items || [];
-    const dBox = $("#adminUserDeals");
-    if(!dItems.length){
-      dBox.innerHTML = `<p class="muted">Пусто.</p>`;
-    }else{
-      const t = document.createElement("table");
-      t.innerHTML = `<thead><tr><th style="width:170px;">ID</th><th>Название</th><th style="width:150px;">Сумма</th><th style="width:140px;">Статус</th><th style="width:190px;">Обновлено</th></tr></thead><tbody></tbody>`;
-      const tb = t.querySelector("tbody");
-      dItems.forEach(d => {
-        const tr = document.createElement("tr");
-        tr.style.cursor = "pointer";
-        tr.innerHTML = `
-          <td class="mono">${escapeHtml(d.id)}</td>
-          <td><div style="font-weight:800;">${escapeHtml(d.title)}</div><div class="muted" style="margin-top:4px;">${escapeHtml(d.note || "")}</div></td>
-          <td class="mono">${money(d.amount)} ${escapeHtml(d.currency)}</td>
-          <td>${statusBadge(d.status)}</td>
-          <td class="mono muted">${escapeHtml(fmtTs(d.updatedAt))}</td>
-        `;
-        tr.addEventListener("click", () => openDeal(d.id));
-        tb.appendChild(tr);
+      b.available = +(Number(b.available || 0) + add).toFixed(2);
+      b.history.push({
+        id: "h_" + nanoid(10),
+        type: "deposit_cryptobot",
+        amount: add,
+        currency: tp.currency || "RUB",
+        provider: "CryptoBot",
+        invoiceId,
+        ts: now(),
       });
-      dBox.innerHTML = "";
-      dBox.appendChild(t);
-    }
 
-    const lItems = logs.items || [];
-    const lBox = $("#adminUserLogs");
-    if(!lItems.length){
-      lBox.innerHTML = `<p class="muted">Пусто.</p>`;
-    }else{
-      const t = document.createElement("table");
-      t.innerHTML = `<thead><tr><th style="width:190px;">Время</th><th style="width:220px;">Тип</th><th>Описание</th></tr></thead><tbody></tbody>`;
-      const tb = t.querySelector("tbody");
-      lItems.forEach(it => {
-        const tr = document.createElement("tr");
-        tr.style.cursor="pointer";
-        tr.innerHTML = `<td class="mono">${escapeHtml(fmtTs(it.ts))}</td><td><span class="badge">${escapeHtml(it.type)}</span></td><td class="muted">${escapeHtml(it.summary || "")}</td>`;
-        tr.addEventListener("click", () => showLogDetail(it));
-        tb.appendChild(tr);
+      putBalance(bds, tp.userId, b);
+
+      tp.status = "paid";
+      tp.credited = true;
+      tp.paidAt = now();
+      tp.updatedAt = now();
+
+      topups.map[invoiceId] = tp;
+      if (topups.shape === "array") {
+        const idx = topups.arr.findIndex(x => String(x.id) === invoiceId);
+        if (idx !== -1) topups.arr[idx] = tp;
+      }
+      topupsWriteDS(topups);
+
+      auditPush({
+        actorId: null,
+        actorNick: "system",
+        actorRoles: ["system"],
+        action: "wallet.topup_credited",
+        targetType: "user",
+        targetId: tp.userId,
+        meta: { invoiceId, amount: add, currency: tp.currency }
       });
-      lBox.innerHTML = "";
-      lBox.appendChild(t);
     }
 
-    $("#banToggleBtn").onclick = async () => {
-      await api("/api/admin/users/" + encodeURIComponent(userId) + "/ban", { method:"POST", body:{ isBanned: !isBanned }});
-      toast("Готово", (!isBanned ? "Пользователь забанен" : "Пользователь разбанен"));
-      await loadUsers(); await loadAdminLogs();
-      await openAdminUser(userId);
-    };
-    $("#makeUserBtn").onclick = async () => {
-      await api("/api/admin/users/" + encodeURIComponent(userId) + "/set-role", { method:"POST", body:{ role: "user" }});
-      toast("Роль обновлена", "Теперь user");
-      await loadUsers(); await loadAdminLogs();
-      await openAdminUser(userId);
-    };
-    $("#makeAdminBtn").onclick = async () => {
-      await api("/api/admin/users/" + encodeURIComponent(userId) + "/set-role", { method:"POST", body:{ role: "admin" }});
-      toast("Роль обновлена", "Теперь admin");
-      await loadUsers(); await loadAdminLogs();
-      await openAdminUser(userId);
-    };
-    $("#adjBtn").onclick = async () => {
-      const currency = $("#adjCur").value;
-      const delta = Number(String($("#adjDelta").value).replace(",", "."));
-      const reason = ($("#adjReason").value || "").trim();
-      if(!(delta && Number.isFinite(delta))) return toast("Ошибка", "Укажи delta (например 10 или -5)");
-      await api("/api/admin/users/" + encodeURIComponent(userId) + "/adjust-balance", { method:"POST", body:{ currency, delta, reason }});
-      toast("Готово", "Баланс изменён");
-      await loadUsers(); await loadAdminLogs();
-      await openAdminUser(userId);
-    };
-
-    openModal("adminUserModal");
+    res.json({ status: paid ? "paid" : "pending", rawStatus: inv.status });
+  } catch (e) {
+    console.error("cryptobot/status fail", e);
+    res.status(500).json({ error: "REQUEST_FAIL" });
   }
+});
 
-  async function loadAdminLogs(){
-    const res = await api("/api/admin/logs?limit=120");
-    const items = res.items || [];
-    const box = $("#adminLogs");
-    if(!items.length){ box.innerHTML = `<p class="muted">Пусто.</p>`; return; }
-    const t = document.createElement("table");
-    t.innerHTML = `<thead><tr><th style="width:190px;">Время</th><th style="width:220px;">Тип</th><th style="width:220px;">Кто → кого</th><th>Описание</th></tr></thead><tbody></tbody>`;
-    const tb = t.querySelector("tbody");
-    items.forEach(it => {
-      const tr = document.createElement("tr");
-      tr.style.cursor="pointer";
-      tr.innerHTML = `
-        <td class="mono">${escapeHtml(fmtTs(it.ts))}</td>
-        <td><span class="badge">${escapeHtml(it.type)}</span></td>
-        <td class="mono muted">${escapeHtml(it.actorId || "-")} → ${escapeHtml(it.targetUserId || "-")}</td>
-        <td class="muted">${escapeHtml(it.summary || "")}</td>
-      `;
-      tr.addEventListener("click", () => showLogDetail(it));
-      tb.appendChild(tr);
-    });
-    box.innerHTML = "";
-    box.appendChild(t);
-  }
+/* ==============================
+   Root fallback (SPA)
+============================== */
+app.get("/", (req, res) => {
+  const indexHtml = path.join(PUBLIC_DIR, "index.html");
+  if (fs.existsSync(indexHtml)) return res.sendFile(indexHtml);
+  res.type("text").send("OnlyMarket backend is running. Put your frontend into /public and refresh.");
+});
 
-  (async function init(){
-    if(!location.hash) setRoute("home");
-    await refreshMe();
-    renderRoute();
-  })();
-</script>
-</body>
-</html>
-
-
+/* ==============================
+   Start server
+============================== */
+const PORT = Number(process.env.PORT || 3000);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("OnlyMarket minimal server running on http://0.0.0.0:" + PORT);
+  if (!CRYPTOPAY_TOKEN) console.log("⚠️ CRYPTOPAY_TOKEN is not set (CryptoBot topups disabled).");
+});
