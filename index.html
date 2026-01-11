@@ -1,849 +1,1540 @@
-/**
- * OnlyMarket backend (single-file demo)
- * - Auth + sessions
- * - Wallet (balances, topup invoices, withdrawals)
- * - Deals with escrow-like flow
- * - Chat per deal
- * - Audit logs (for user + admin)
- * - Admin: users (ban/role), adjust balance, view user logs + user deals, global logs
- *
- * UI: onlymarket_dark.html (same dir)
- *
- * Run:
- *   npm i express cookie-parser
- *   node server.dark.js
- */
 
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
-const express = require("express");
-const cookieParser = require("cookie-parser");
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>OnlyMarket</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#050812;
+      --panel: rgba(255,255,255,.06);
+      --panel2: rgba(255,255,255,.08);
+      --border: rgba(255,255,255,.10);
+      --fg: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.60);
+      --muted2: rgba(255,255,255,.42);
+      --accent:#3b82f6;
+      --accent2:#8b5cf6;
+      --good:#34d399;
+      --warn:#fbbf24;
+      --bad:#fb7185;
+      --shadow: 0 18px 60px rgba(0,0,0,.55);
+      --r:18px;
+      --r2:24px;
+      --max:1240px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+      background:
+        radial-gradient(1200px 600px at 20% 0%, rgba(59,130,246,.22), transparent 60%),
+        radial-gradient(900px 500px at 90% 20%, rgba(139,92,246,.16), transparent 55%),
+        radial-gradient(900px 500px at 40% 120%, rgba(52,211,153,.10), transparent 60%),
+        var(--bg);
+      color:var(--fg);
+      overflow-x:hidden;
+    }
+    a{color:inherit;text-decoration:none}
+    button,input,select,textarea{font:inherit;color:inherit;background:transparent;border:none;outline:none}
+    .wrap{min-height:100%;display:flex;justify-content:center;padding:22px 16px 60px}
+    .shell{width:100%;max-width:var(--max);display:grid;grid-template-columns:290px 1fr;gap:16px;align-items:start}
+    @media (max-width:980px){.shell{grid-template-columns:1fr}}
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
-const HOST = process.env.HOST || "0.0.0.0";
-
-const FILE_HTML = path.join(__dirname, "onlymarket_dark.html");
-const DATA_DIR = path.join(__dirname, "data");
-
-const SESSION_COOKIE = "om_session";
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
-
-// Payment providers config (internal mapping; UI doesn't expose providers)
-const CRYPTOBOT_PAY_BASE = process.env.CRYPTOBOT_PAY_BASE || "https://t.me/CryptoBot";
-const PLATEGA_PAY_BASE = process.env.PLATEGA_PAY_BASE || "https://example.com/pay";
-
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-
-function readJson(file, fallback) {
-  try {
-    const p = path.join(DATA_DIR, file);
-    if (!fs.existsSync(p)) return fallback;
-    const raw = fs.readFileSync(p, "utf-8");
-    if (!raw.trim()) return fallback;
-    return JSON.parse(raw);
-  } catch (e) {
-    console.error("readJson failed:", file, e);
-    return fallback;
-  }
-}
-function writeJson(file, data) {
-  const p = path.join(DATA_DIR, file);
-  const tmp = p + ".tmp";
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-  fs.renameSync(tmp, p);
-}
-function now() { return Date.now(); }
-function rid(prefix) { return prefix + "_" + crypto.randomBytes(9).toString("hex"); }
-function clampStr(s, max = 180) {
-  const x = String(s ?? "");
-  return x.length > max ? x.slice(0, max) + "…" : x;
-}
-function round2(x) { return Math.round(Number(x) * 100) / 100; }
-
-// ---------- password hashing ----------
-function scryptHash(password, salt) {
-  return new Promise((resolve, reject) => {
-    crypto.scrypt(password, salt, 64, { N: 16384, r: 8, p: 1 }, (err, derivedKey) => {
-      if (err) return reject(err);
-      resolve(derivedKey.toString("hex"));
-    });
-  });
-}
-async function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = await scryptHash(password, salt);
-  return { salt, hash };
-}
-async function verifyPassword(password, stored) {
-  if (!stored || !stored.salt || !stored.hash) return false;
-  const hash = await scryptHash(password, stored.salt);
-  const a = Buffer.from(hash, "hex");
-  const b = Buffer.from(stored.hash, "hex");
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
-}
-
-// ---------- state ----------
-let db = {
-  users: readJson("users.json", []),
-  sessions: readJson("sessions.json", {}),
-  balances: readJson("balances.json", {}),
-  topups: readJson("topups.json", {}),
-  withdrawals: readJson("withdrawals.json", {}),
-  deals: readJson("deals.json", {}), // id -> deal
-  dealMessages: readJson("deal_messages.json", {}), // dealId -> [messages]
-  audit: readJson("audit.json", [])
-};
-
-function persist() {
-  writeJson("users.json", db.users);
-  writeJson("sessions.json", db.sessions);
-  writeJson("balances.json", db.balances);
-  writeJson("topups.json", db.topups);
-  writeJson("withdrawals.json", db.withdrawals);
-  writeJson("deals.json", db.deals);
-  writeJson("deal_messages.json", db.dealMessages);
-  writeJson("audit.json", db.audit);
-}
-
-function getUserById(id) { return db.users.find(u => u.id === id); }
-function getUserByEmail(email) { return db.users.find(u => u.email.toLowerCase() === String(email).toLowerCase()); }
-function getUserByUsername(username) { return db.users.find(u => u.username.toLowerCase() === String(username).toLowerCase()); }
-
-function safeUser(u) {
-  return { id: u.id, email: u.email, username: u.username, role: u.role, isBanned: !!u.isBanned, createdAt: u.createdAt };
-}
-
-function ensureBalance(userId) {
-  if (!db.balances[userId]) db.balances[userId] = { USD: 0, EUR: 0, RUB: 0 };
-  for (const k of ["USD", "EUR", "RUB"]) {
-    if (typeof db.balances[userId][k] !== "number" || !Number.isFinite(db.balances[userId][k])) db.balances[userId][k] = 0;
-  }
-  return db.balances[userId];
-}
-
-function audit({ type, summary, actorId, targetUserId, req, meta }) {
-  const entry = {
-    id: rid("log"),
-    ts: now(),
-    type,
-    summary: clampStr(summary || ""),
-    actorId: actorId || null,
-    targetUserId: targetUserId || null,
-    ip: req ? (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").toString().split(",")[0].trim() : null,
-    ua: req ? String(req.headers["user-agent"] || "") : null,
-    meta: meta || {}
-  };
-  db.audit.push(entry);
-  const MAX = 30000;
-  if (db.audit.length > MAX) db.audit = db.audit.slice(db.audit.length - MAX);
-  persist();
-  return entry;
-}
-
-// ---------- bootstrap demo admin if empty ----------
-async function bootstrapDemoAdmin() {
-  if (db.users.length) return;
-  const email = "admin@onlymarket.local";
-  const username = "admin";
-  const password = "admin12345";
-
-  const pw = await hashPassword(password);
-  const user = { id: rid("u"), email, username, password: pw, role: "admin", isBanned: false, createdAt: now() };
-  db.users.push(user);
-  ensureBalance(user.id);
-
-  audit({ type: "auth.bootstrap_admin", summary: "Created demo admin (first run)", actorId: user.id, targetUserId: user.id, req: null, meta: { email } });
-  persist();
-
-  console.log("============================================================");
-  console.log("DEMO ADMIN CREATED (first run):");
-  console.log("  email:", email);
-  console.log("  password:", password);
-  console.log("CHANGE THIS IN PRODUCTION.");
-  console.log("============================================================");
-}
-
-// ---------- auth middleware ----------
-function getSession(req) {
-  const token = req.cookies[SESSION_COOKIE];
-  if (!token) return null;
-  const s = db.sessions[token];
-  if (!s) return null;
-  if (s.expiresAt < now()) {
-    delete db.sessions[token];
-    persist();
-    return null;
-  }
-  return { token, ...s };
-}
-function requireAuth(req, res, next) {
-  const s = getSession(req);
-  if (!s) return res.status(401).json({ error: "Not authenticated" });
-  const user = getUserById(s.userId);
-  if (!user) return res.status(401).json({ error: "Session invalid" });
-  if (user.isBanned) return res.status(403).json({ error: "User banned" });
-  req.user = user;
-  req.session = s;
-  next();
-}
-function requireAdmin(req, res, next) {
-  if (!req.user || req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
-  next();
-}
-function setSessionCookie(res, token) {
-  res.cookie(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: false, // set true behind HTTPS
-    maxAge: SESSION_TTL_MS,
-    path: "/"
-  });
-}
-
-// ---------- helpers ----------
-function validateCurrency(cur) { return ["USD", "EUR", "RUB"].includes(cur); }
-function validateProvider(provider) { return ["cryptobot", "platega"].includes(provider); }
-function validateMethod(provider, method) {
-  if (provider === "cryptobot") return method === "crypto";
-  if (provider === "platega") return ["sbp", "card"].includes(method);
-  return false;
-}
-function buildPayUrl(provider, method, invoiceId) {
-  if (provider === "cryptobot") return `${CRYPTOBOT_PAY_BASE}?start=${encodeURIComponent(invoiceId)}`;
-  return `${PLATEGA_PAY_BASE}?invoice=${encodeURIComponent(invoiceId)}&method=${encodeURIComponent(method)}`;
-}
-
-// ---------- deals helpers ----------
-function ensureDealMessages(dealId) {
-  if (!db.dealMessages[dealId]) db.dealMessages[dealId] = [];
-  return db.dealMessages[dealId];
-}
-function dealToClient(d) {
-  const buyer = getUserById(d.buyerId);
-  const seller = getUserById(d.sellerId);
-  return {
-    id: d.id,
-    title: d.title,
-    note: d.note || "",
-    amount: d.amount,
-    currency: d.currency,
-    status: d.status,
-    buyerId: d.buyerId,
-    sellerId: d.sellerId,
-    buyerUsername: buyer ? buyer.username : "unknown",
-    sellerUsername: seller ? seller.username : "unknown",
-    escrow: d.escrow || { amount: 0, currency: d.currency, funded: false },
-    createdAt: d.createdAt,
-    updatedAt: d.updatedAt
-  };
-}
-function getDealOr404(dealId) { return db.deals[dealId] || null; }
-function assertDealAccess(req, res, deal) {
-  const me = req.user;
-  const isParticipant = deal.buyerId === me.id || deal.sellerId === me.id;
-  const isAdmin = me.role === "admin";
-  if (!isParticipant && !isAdmin) { res.status(403).json({ error: "Forbidden" }); return false; }
-  return true;
-}
-
-// ---------- app ----------
-const app = express();
-app.disable("x-powered-by");
-app.use(express.json({ limit: "1mb" }));
-app.use(cookieParser());
-
-app.get("/", (req, res) => res.sendFile(FILE_HTML));
-app.get("/health", (req, res) => res.json({ ok: true, ts: now() }));
-app.get("/favicon.ico", (req, res) => res.status(204).end());
-app.get(/^\/(home|auth|profile|deals|admin)$/, (req, res) => res.sendFile(FILE_HTML));
-
-// ---------- auth ----------
-app.get("/api/me", (req, res) => {
-  const s = getSession(req);
-  if (!s) return res.status(200).json(null);
-  const user = getUserById(s.userId);
-  if (!user || user.isBanned) return res.status(200).json(null);
-  return res.json({ id: user.id, email: user.email, username: user.username, role: user.role });
-});
-
-app.post("/api/auth/register", async (req, res) => {
-  try {
-    const email = String(req.body.email || "").trim();
-    const username = String(req.body.username || "").trim();
-    const password = String(req.body.password || "");
-
-    if (!email.includes("@")) return res.status(400).json({ error: "Invalid email" });
-    if (username.length < 3) return res.status(400).json({ error: "Username too short" });
-    if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 chars" });
-
-    if (getUserByEmail(email)) return res.status(409).json({ error: "Email already exists" });
-    if (getUserByUsername(username)) return res.status(409).json({ error: "Username already exists" });
-
-    const pw = await hashPassword(password);
-    const user = { id: rid("u"), email, username, password: pw, role: "user", isBanned: false, createdAt: now() };
-    db.users.push(user);
-    ensureBalance(user.id);
-
-    const token = rid("s") + crypto.randomBytes(18).toString("hex");
-    db.sessions[token] = { userId: user.id, expiresAt: now() + SESSION_TTL_MS };
-    persist();
-    setSessionCookie(res, token);
-
-    audit({ type: "auth.register", summary: "User registered", actorId: user.id, targetUserId: user.id, req, meta: { email } });
-    res.json({ ok: true });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-app.post("/api/auth/login", async (req, res) => {
-  try {
-    const emailOrUsername = String(req.body.emailOrUsername || "").trim();
-    const password = String(req.body.password || "");
-    if (!emailOrUsername || !password) return res.status(400).json({ error: "Missing credentials" });
-
-    const user = emailOrUsername.includes("@") ? getUserByEmail(emailOrUsername) : getUserByUsername(emailOrUsername);
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
-    if (user.isBanned) return res.status(403).json({ error: "User banned" });
-
-    const ok = await verifyPassword(password, user.password);
-    if (!ok) {
-      audit({ type: "auth.login_failed", summary: "Bad password", actorId: user.id, targetUserId: user.id, req, meta: {} });
-      return res.status(401).json({ error: "Invalid credentials" });
+    .side{
+      position:sticky;top:16px;
+      border-radius:var(--r2);
+      background:linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.04));
+      border:1px solid var(--border);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    @media (max-width:980px){.side{position:relative;top:0}}
+    .brand{
+      padding:18px 18px 14px;
+      display:flex;gap:12px;align-items:center;
+      border-bottom:1px solid var(--border);
+      background:rgba(0,0,0,.10);
+    }
+    .logo{
+      width:40px;height:40px;border-radius:14px;
+      background:linear-gradient(135deg, rgba(59,130,246,.95), rgba(139,92,246,.92));
+      box-shadow:0 16px 40px rgba(59,130,246,.25);
+      position:relative;flex:0 0 auto;
+    }
+    .logo:after{
+      content:"";position:absolute;inset:9px;border-radius:12px;
+      background:rgba(0,0,0,.22);
+      border:1px solid rgba(255,255,255,.25);
+    }
+    .brand h1{margin:0;font-size:14px;letter-spacing:.3px}
+    .brand p{margin:4px 0 0;font-size:12px;color:var(--muted)}
+    .nav{padding:10px;display:flex;flex-direction:column;gap:6px}
+    .nav a{
+      display:flex;align-items:center;gap:10px;
+      padding:12px 12px;border-radius:14px;
+      color:rgba(255,255,255,.82);
+      border:1px solid transparent;
+      transition:.15s ease;
+    }
+    .nav a:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.08)}
+    .nav a.active{
+      background:linear-gradient(180deg, rgba(59,130,246,.18), rgba(139,92,246,.12));
+      border-color:rgba(59,130,246,.25);
+      color:rgba(255,255,255,.95);
+    }
+    .dot{width:9px;height:9px;border-radius:99px;background:rgba(255,255,255,.22)}
+    .active .dot{
+      background:linear-gradient(135deg, rgba(59,130,246,1), rgba(139,92,246,1));
+      box-shadow:0 0 0 4px rgba(59,130,246,.18);
+    }
+    .sideFooter{
+      padding:12px 14px 14px;border-top:1px solid var(--border);
+      display:flex;gap:10px;align-items:center;justify-content:space-between;
+      background:rgba(0,0,0,.08);
+    }
+    .pill{
+      padding:8px 10px;border-radius:999px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.05);
+      font-size:12px;color:var(--muted);
+      max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
     }
 
-    const token = rid("s") + crypto.randomBytes(18).toString("hex");
-    db.sessions[token] = { userId: user.id, expiresAt: now() + SESSION_TTL_MS };
-    persist();
-    setSessionCookie(res, token);
+    .content{
+      border-radius:var(--r2);
+      border:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
+      box-shadow:var(--shadow);
+      overflow:hidden;
+      min-height:640px;
+    }
+    .topbar{
+      padding:18px 18px 14px;
+      display:flex;align-items:center;justify-content:space-between;gap:12px;
+      border-bottom:1px solid var(--border);
+      background:rgba(0,0,0,.10);
+    }
+    .topbar h2{margin:0;font-size:16px;letter-spacing:.2px}
+    .topbar .sub{margin-top:6px;font-size:12px;color:var(--muted)}
+    .main{padding:18px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    @media (max-width:920px){.grid2{grid-template-columns:1fr}}
+    .card{
+      border-radius:var(--r);
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.05);
+      padding:14px;
+    }
+    .card h3{margin:0;font-size:14px;color:rgba(255,255,255,.90)}
+    .card p{margin:8px 0 0;color:var(--muted);font-size:12.5px;line-height:1.5}
+    .muted{color:var(--muted)}
+    .mono{font-family:var(--mono)}
+    .btn{
+      cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:10px;
+      padding:10px 12px;border-radius:14px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.06);
+      transition:.15s ease;user-select:none;white-space:nowrap;
+    }
+    .btn:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.18)}
+    .btn.primary{
+      background:linear-gradient(135deg, rgba(59,130,246,.95), rgba(139,92,246,.92));
+      border-color:rgba(59,130,246,.35);
+      box-shadow:0 16px 40px rgba(59,130,246,.20);
+    }
+    .btn.primary:hover{filter:brightness(1.05)}
+    .btn.danger{background:rgba(251,113,133,.14);border-color:rgba(251,113,133,.35)}
+    .btn.ghost{background:rgba(255,255,255,.03)}
+    .hidden{display:none !important}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
 
-    audit({ type: "auth.login", summary: "User logged in", actorId: user.id, targetUserId: user.id, req, meta: {} });
-    res.json({ ok: true });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Server error" });
+    .kpis{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    .kpi{
+      padding:10px 12px;border-radius:14px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.12);
+      min-width:160px;
+    }
+    .kpi .label{font-size:11px;color:var(--muted)}
+    .kpi .value{margin-top:6px;font-size:18px;font-weight:800;letter-spacing:.2px}
+    .kpi .value small{font-size:12px;font-weight:700;color:var(--muted)}
+
+    .field{display:flex;flex-direction:column;gap:6px;margin-top:12px}
+    .field label{font-size:12px;color:var(--muted)}
+    .input,.select,.textarea{
+      padding:12px 12px;border-radius:14px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.14);
+    }
+    .textarea{min-height:88px;resize:vertical}
+    .input:focus,.select:focus,.textarea:focus{border-color:rgba(59,130,246,.55);box-shadow:0 0 0 6px rgba(59,130,246,.14)}
+
+    table{
+      width:100%;border-collapse:collapse;overflow:hidden;
+      border-radius:16px;border:1px solid rgba(255,255,255,.10);
+    }
+    th,td{
+      text-align:left;padding:12px 12px;font-size:12.5px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      vertical-align:top;
+    }
+    th{color:rgba(255,255,255,.72);font-weight:700;background:rgba(0,0,0,.16)}
+    tr:hover td{background:rgba(255,255,255,.04)}
+
+    .badge{
+      display:inline-flex;align-items:center;
+      padding:4px 8px;border-radius:999px;font-size:11px;
+      border:1px solid rgba(255,255,255,.14);
+      color:rgba(255,255,255,.78);
+      background:rgba(255,255,255,.06);
+      white-space:nowrap;
+    }
+    .badge.good{border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.12)}
+    .badge.bad{border-color:rgba(251,113,133,.35);background:rgba(251,113,133,.12)}
+    .badge.warn{border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.12)}
+
+    .backdrop{
+      position:fixed;inset:0;background:rgba(0,0,0,.60);
+      backdrop-filter:blur(10px);
+      display:none;align-items:center;justify-content:center;padding:18px;z-index:50;
+    }
+    .backdrop.show{display:flex}
+    .modal{
+      width:100%;max-width:900px;border-radius:22px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(10,12,20,.92);
+      box-shadow:0 30px 120px rgba(0,0,0,.7);
+      overflow:hidden;animation:pop .16s ease;
+    }
+    @keyframes pop{from{transform:translateY(6px) scale(.99);opacity:.7}to{transform:translateY(0) scale(1);opacity:1}}
+    .modalHead{
+      padding:16px 16px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.10);
+    }
+    .modalTitle{font-weight:800;letter-spacing:.2px}
+    .modalBody{padding:16px}
+    .iconBtn{
+      cursor:pointer;width:38px;height:38px;border-radius:14px;
+      border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);
+      display:flex;align-items:center;justify-content:center;transition:.15s ease;
+    }
+    .iconBtn:hover{background:rgba(255,255,255,.10)}
+    .x{width:14px;height:14px;border-right:2px solid rgba(255,255,255,.70);border-bottom:2px solid rgba(255,255,255,.70);transform:rotate(45deg);margin-left:2px}
+
+    .payGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+    @media (max-width:740px){.payGrid{grid-template-columns:1fr}}
+    .payOpt{
+      cursor:pointer;border-radius:18px;border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.05);padding:14px;
+      display:flex;gap:12px;align-items:center;justify-content:space-between;transition:.15s ease;
+    }
+    .payOpt:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.20)}
+    .payOpt.active{border-color:rgba(59,130,246,.55);box-shadow:0 0 0 6px rgba(59,130,246,.14)}
+    .payLeft{display:flex;gap:12px;align-items:center}
+    .payLogo{
+      width:42px;height:42px;border-radius:14px;border:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center;overflow:hidden;
+    }
+    .payLogo svg{width:22px;height:22px;opacity:.9}
+    .payMeta .name{font-weight:800}
+    .payMeta .desc{font-size:12px;color:var(--muted);margin-top:4px}
+
+    .chatBox{border-radius:18px;border:1px solid rgba(255,255,255,.10);background:rgba(0,0,0,.14);overflow:hidden}
+    .chatLog{padding:12px;max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+    .msg{display:flex;flex-direction:column;gap:6px;max-width:88%}
+    .msg.me{align-self:flex-end}
+    .bubble{
+      border-radius:16px;padding:10px 12px;border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.06);line-height:1.35;font-size:13px;white-space:pre-wrap;word-break:break-word;
+    }
+    .msg.me .bubble{
+      background:linear-gradient(135deg, rgba(59,130,246,.22), rgba(139,92,246,.16));
+      border-color:rgba(59,130,246,.22);
+    }
+    .msgMeta{font-size:11px;color:var(--muted2);display:flex;gap:8px;align-items:center}
+    .chatSend{display:flex;gap:10px;padding:12px;border-top:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.10);align-items:flex-end}
+    .chatSend textarea{flex:1;min-height:44px;max-height:120px;resize:vertical}
+
+    .toastWrap{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:100;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+    .toast{
+      pointer-events:auto;border-radius:16px;border:1px solid rgba(255,255,255,.14);
+      background:rgba(10,12,20,.92);padding:12px 12px;box-shadow:0 20px 80px rgba(0,0,0,.7);
+      min-width:280px;max-width:560px;animation:toast .18s ease;
+    }
+    @keyframes toast{from{transform:translateY(6px);opacity:.65}to{transform:translateY(0);opacity:1}}
+    .toast .t{font-weight:800}
+    .toast .m{margin-top:4px;color:var(--muted);font-size:12.5px;line-height:1.4}
+    .toast .mini{margin-top:8px;display:flex;justify-content:flex-end;gap:10px}
+    .mini .link{pointer-events:auto;cursor:pointer;color:rgba(255,255,255,.88);font-size:12px;text-decoration:underline;text-decoration-color:rgba(255,255,255,.25);text-underline-offset:3px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="shell">
+    <aside class="side">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>OnlyMarket</h1>
+          <p id="sideSub">Маркетплейс • сделки • чат • кошелёк</p>
+        </div>
+      </div>
+      <nav class="nav" id="nav">
+        <a href="#/home" data-route="home"><span class="dot"></span><span>Главная</span></a>
+        <a href="#/deals" data-route="deals" class="hidden" id="navDeals"><span class="dot"></span><span>Сделки</span></a>
+        <a href="#/profile" data-route="profile" class="hidden" id="navProfile"><span class="dot"></span><span>Кошелёк</span></a>
+        <a href="#/admin" data-route="admin" class="hidden" id="navAdmin"><span class="dot"></span><span>Админка</span></a>
+        <a href="#/auth" data-route="auth" id="navAuth"><span class="dot"></span><span>Войти</span></a>
+      </nav>
+      <div class="sideFooter">
+        <span class="pill" id="authPill">Гость</span>
+        <button class="btn danger hidden" id="logoutBtn">Выйти</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="topbar">
+        <div>
+          <h2 id="title">Главная</h2>
+          <div class="sub" id="subtitle">Сделки, чат и кошелёк — всё в одном.</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <button class="btn" id="refreshBtn">Обновить</button>
+          <button class="btn primary hidden" id="topupBtnTop">Пополнить</button>
+          <button class="btn primary hidden" id="newDealBtnTop">Новая сделка</button>
+        </div>
+      </div>
+
+      <div class="main">
+        <section id="view-home">
+          <div class="grid2">
+            <div class="card">
+              <h3>Быстрый обзор</h3>
+              <div class="kpis" id="homeKpis"></div>
+              <div class="actions" id="homeActions">
+                <a class="btn primary" href="#/auth" id="homeLoginBtn">Войти</a>
+                <a class="btn hidden" href="#/deals" id="homeDealsBtn">Открыть сделки</a>
+                <a class="btn hidden" href="#/profile" id="homeWalletBtn">Открыть кошелёк</a>
+              </div>
+              <p class="muted" id="homeHint" style="margin-top:10px;">Войдите, чтобы видеть сделки и баланс.</p>
+            </div>
+
+            <div class="card">
+              <h3>Как работает сделка</h3>
+              <p>
+                1) Создаёте сделку и указываете пользователя и сумму.<br>
+                2) Покупатель вносит деньги в сделку (из кошелька).<br>
+                3) Продавец отмечает доставку товара.<br>
+                4) Покупатель подтверждает — деньги переходят продавцу.
+              </p>
+              <div class="actions">
+                <button class="btn primary hidden" id="homeNewDealBtn">Создать сделку</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-auth" class="hidden">
+          <div class="grid2">
+            <div class="card">
+              <h3>Вход</h3>
+              <div class="field">
+                <label>Email или username</label>
+                <input class="input" id="loginId" placeholder="email или username" autocomplete="username">
+              </div>
+              <div class="field">
+                <label>Пароль</label>
+                <input class="input" id="loginPw" type="password" placeholder="••••••••" autocomplete="current-password">
+              </div>
+              <div class="actions">
+                <button class="btn primary" id="loginBtn">Войти</button>
+                <button class="btn ghost" id="demoBtn">Демо</button>
+              </div>
+              <p class="muted" style="margin-top:10px;">Демо логин для первого запуска: <span class="mono">admin@onlymarket.local</span> / <span class="mono">admin12345</span></p>
+            </div>
+            <div class="card">
+              <h3>Регистрация</h3>
+              <div class="field">
+                <label>Email</label>
+                <input class="input" id="regEmail" placeholder="you@mail.com" autocomplete="email">
+              </div>
+              <div class="field">
+                <label>Username</label>
+                <input class="input" id="regUser" placeholder="nickname" autocomplete="username">
+              </div>
+              <div class="field">
+                <label>Пароль</label>
+                <input class="input" id="regPw" type="password" placeholder="минимум 8 символов" autocomplete="new-password">
+              </div>
+              <div class="actions">
+                <button class="btn primary" id="regBtn">Создать аккаунт</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-deals" class="hidden">
+          <div class="card">
+            <h3>Сделки</h3>
+            <p class="muted">Клик по сделке → детали + чат + действия.</p>
+            <div class="actions">
+              <button class="btn primary" id="newDealBtn">Новая сделка</button>
+              <button class="btn" id="refreshDealsBtn">Обновить</button>
+            </div>
+
+            <div style="margin-top:12px; overflow:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:170px;">ID</th>
+                    <th>Название</th>
+                    <th style="width:160px;">Сумма</th>
+                    <th style="width:140px;">Статус</th>
+                    <th style="width:220px;">Участники</th>
+                    <th style="width:190px;">Обновлено</th>
+                  </tr>
+                </thead>
+                <tbody id="dealsTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-profile" class="hidden">
+          <div class="card">
+            <h3>Кошелёк</h3>
+            <div class="kpis" id="balanceKpis"></div>
+            <div class="actions">
+              <button class="btn primary" id="topupBtn2">Пополнить</button>
+              <button class="btn" id="withdrawBtn">Вывести</button>
+              <button class="btn" id="logsBtn">Логи</button>
+            </div>
+          </div>
+
+          <div style="height:12px"></div>
+
+          <div class="grid2">
+            <div class="card">
+              <h3>Смена пароля</h3>
+              <div class="field">
+                <label>Текущий пароль</label>
+                <input class="input" id="oldPw" type="password" placeholder="••••••••" autocomplete="current-password">
+              </div>
+              <div class="field">
+                <label>Новый пароль</label>
+                <input class="input" id="newPw" type="password" placeholder="минимум 8 символов" autocomplete="new-password">
+              </div>
+              <div class="actions">
+                <button class="btn primary" id="changePwBtn">Сменить</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Последние события</h3>
+              <p class="muted">10 последних действий (вход, сделки, операции кошелька).</p>
+              <div id="recentLogs"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="view-admin" class="hidden">
+          <div class="card">
+            <h3>Пользователи</h3>
+            <p class="muted">Клик → профиль пользователя (балансы, логи, сделки).</p>
+            <div class="field">
+              <label>Поиск</label>
+              <input class="input" id="userSearch" placeholder="email / username / id">
+            </div>
+            <div style="margin-top:12px; overflow:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:260px;">Пользователь</th>
+                    <th style="width:140px;">Роль</th>
+                    <th style="width:140px;">Статус</th>
+                    <th>Создан</th>
+                  </tr>
+                </thead>
+                <tbody id="usersTbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="height:12px"></div>
+
+          <div class="card">
+            <h3>Глобальные логи</h3>
+            <p class="muted">События системы (только для админов). Клик → детали.</p>
+            <div id="adminLogs"></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="backdrop" id="topupModal">
+  <div class="modal">
+    <div class="modalHead">
+      <div class="modalTitle">Пополнение</div>
+      <button class="iconBtn" data-close="topupModal"><span class="x"></span></button>
+    </div>
+    <div class="modalBody">
+      <div class="grid2">
+        <div class="card">
+          <h3>Сумма</h3>
+          <div class="field">
+            <label>Сумма</label>
+            <input class="input" id="topupAmount" placeholder="Напр. 10" inputmode="decimal">
+          </div>
+          <div class="field">
+            <label>Валюта</label>
+            <select class="select" id="topupCurrency">
+              <option value="EUR">EUR</option>
+              <option value="USD">USD</option>
+              <option value="RUB">RUB</option>
+            </select>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Способ оплаты</h3>
+          <div class="payGrid" id="payGrid">
+            <div class="payOpt active" data-kind="crypto">
+              <div class="payLeft">
+                <div class="payLogo" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l7.5 4.5v11L12 22l-7.5-4.5v-11L12 2z" stroke="currentColor" stroke-width="1.6"/><path d="M9.5 10.2c0-1.2.9-2.1 2.3-2.1h1.2c1.4 0 2.3.9 2.3 2.1 0 1.2-.9 2.1-2.3 2.1h-1.2c-1.4 0-2.3.9-2.3 2.1 0 1.2.9 2.1 2.3 2.1h1.2c1.4 0 2.3-.9 2.3-2.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                </div>
+                <div class="payMeta">
+                  <div class="name">Крипта</div>
+                  <div class="desc">Оплата криптовалютой</div>
+                </div>
+              </div>
+              <span class="badge">CRYPTO</span>
+            </div>
+
+            <div class="payOpt" data-kind="sbp">
+              <div class="payLeft">
+                <div class="payLogo" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M7 7h10v10H7V7z" stroke="currentColor" stroke-width="1.6"/><path d="M9 9h6v6H9V9z" stroke="currentColor" stroke-width="1.6"/><path d="M5 12h2M17 12h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                </div>
+                <div class="payMeta">
+                  <div class="name">СБП</div>
+                  <div class="desc">Перевод по QR (RUB)</div>
+                </div>
+              </div>
+              <span class="badge">RUB</span>
+            </div>
+
+            <div class="payOpt" data-kind="card" style="grid-column: 1 / -1;">
+              <div class="payLeft">
+                <div class="payLogo" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M4 7.5h16v9H4v-9z" stroke="currentColor" stroke-width="1.6"/><path d="M4 10h16" stroke="currentColor" stroke-width="1.6"/><path d="M7 14h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                </div>
+                <div class="payMeta">
+                  <div class="name">Карта</div>
+                  <div class="desc">Оплата банковской картой</div>
+                </div>
+              </div>
+              <span class="badge">CARD</span>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn primary" id="createTopupBtn">Создать счёт</button>
+            <button class="btn" data-close="topupModal">Отмена</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card hidden" id="invoiceCard" style="margin-top:12px;">
+        <h3>Счёт создан</h3>
+        <p id="invoiceText" class="muted"></p>
+        <div class="actions">
+          <a class="btn primary" id="payLink" target="_blank" rel="noopener">Перейти к оплате</a>
+          <button class="btn" id="checkInvoiceBtn">Проверить статус</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="backdrop" id="withdrawModal">
+  <div class="modal">
+    <div class="modalHead">
+      <div class="modalTitle">Вывод</div>
+      <button class="iconBtn" data-close="withdrawModal"><span class="x"></span></button>
+    </div>
+    <div class="modalBody">
+      <div class="grid2">
+        <div class="card">
+          <h3>Сумма</h3>
+          <div class="field">
+            <label>Валюта</label>
+            <select class="select" id="withdrawCurrency">
+              <option value="EUR">EUR</option>
+              <option value="USD">USD</option>
+              <option value="RUB">RUB</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Сумма</label>
+            <input class="input" id="withdrawAmount" placeholder="например 10" inputmode="decimal">
+          </div>
+        </div>
+        <div class="card">
+          <h3>Куда</h3>
+          <div class="field">
+            <label>Реквизиты / адрес</label>
+            <input class="input" id="withdrawDest" placeholder="карта / кошелёк / реквизиты">
+          </div>
+          <div class="field">
+            <label>Комментарий (опционально)</label>
+            <input class="input" id="withdrawNote" placeholder="например: вывод на карту">
+          </div>
+          <div class="actions">
+            <button class="btn primary" id="createWithdrawBtn">Создать заявку</button>
+            <button class="btn" data-close="withdrawModal">Отмена</button>
+          </div>
+          <p class="muted" style="margin-top:10px;">В шаблоне вывод создаётся со статусом <span class="mono">pending</span>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="backdrop" id="newDealModal">
+  <div class="modal">
+    <div class="modalHead">
+      <div class="modalTitle">Новая сделка</div>
+      <button class="iconBtn" data-close="newDealModal"><span class="x"></span></button>
+    </div>
+    <div class="modalBody">
+      <div class="grid2">
+        <div class="card">
+          <h3>Параметры</h3>
+          <div class="field">
+            <label>Тип</label>
+            <select class="select" id="dealType">
+              <option value="buy">Я покупаю</option>
+              <option value="sell">Я продаю</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Пользователь (email или username)</label>
+            <input class="input" id="dealCounterparty" placeholder="username или email">
+          </div>
+          <div class="field">
+            <label>Название / что покупаем</label>
+            <input class="input" id="dealTitle" placeholder="например: 1000 gold, skin, аккаунт...">
+          </div>
+        </div>
+        <div class="card">
+          <h3>Сумма</h3>
+          <div class="field">
+            <label>Валюта</label>
+            <select class="select" id="dealCurrency">
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="RUB">RUB</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Сумма</label>
+            <input class="input" id="dealAmount" placeholder="например 10" inputmode="decimal">
+          </div>
+          <div class="field">
+            <label>Комментарий (опционально)</label>
+            <textarea class="textarea" id="dealNote" placeholder="детали: сроки, описание и т.д."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="createDealBtn">Создать</button>
+        <button class="btn" data-close="newDealModal">Отмена</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="backdrop" id="dealModal">
+  <div class="modal">
+    <div class="modalHead">
+      <div class="modalTitle" id="dealModalTitle">Сделка</div>
+      <button class="iconBtn" data-close="dealModal"><span class="x"></span></button>
+    </div>
+    <div class="modalBody" id="dealModalBody"></div>
+  </div>
+</div>
+
+<div class="backdrop" id="logsModal">
+  <div class="modal">
+    <div class="modalHead">
+      <div class="modalTitle">Логи</div>
+      <button class="iconBtn" data-close="logsModal"><span class="x"></span></button>
+    </div>
+    <div class="modalBody">
+      <div id="logsTable"></div>
+    </div>
+  </div>
+</div>
+
+<div class="backdrop" id="logDetailModal">
+  <div class="modal">
+    <div class="modalHead">
+      <div class="modalTitle">Детали</div>
+      <button class="iconBtn" data-close="logDetailModal"><span class="x"></span></button>
+    </div>
+    <div class="modalBody">
+      <div class="card">
+        <h3 id="logDetailTitle">…</h3>
+        <p class="muted" id="logDetailMeta">…</p>
+        <pre class="mono" id="logDetailJson" style="white-space:pre-wrap;word-break:break-word;margin:12px 0 0;color:rgba(255,255,255,.86);"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="backdrop" id="adminUserModal">
+  <div class="modal">
+    <div class="modalHead">
+      <div class="modalTitle" id="adminUserTitle">Профиль пользователя</div>
+      <button class="iconBtn" data-close="adminUserModal"><span class="x"></span></button>
+    </div>
+    <div class="modalBody">
+      <div id="adminUserBody"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toastWrap" id="toastWrap"></div>
+
+<script>
+  const $ = (q, el=document) => el.querySelector(q);
+  const $$ = (q, el=document) => Array.from(el.querySelectorAll(q));
+
+  function fmtTs(ts){
+    const d = new Date(ts);
+    return d.toLocaleString(undefined, { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' });
   }
-});
-
-app.post("/api/auth/logout", requireAuth, (req, res) => {
-  const token = req.session.token;
-  delete db.sessions[token];
-  persist();
-  res.clearCookie(SESSION_COOKIE, { path: "/" });
-  audit({ type: "auth.logout", summary: "User logged out", actorId: req.user.id, targetUserId: req.user.id, req, meta: {} });
-  res.json({ ok: true });
-});
-
-// ---------- security ----------
-app.post("/api/security/change-password", requireAuth, async (req, res) => {
-  try {
-    const oldPassword = String(req.body.oldPassword || "");
-    const newPassword = String(req.body.newPassword || "");
-    if (newPassword.length < 8) return res.status(400).json({ error: "New password must be at least 8 chars" });
-
-    const user = req.user;
-    const ok = await verifyPassword(oldPassword, user.password);
-    if (!ok) return res.status(401).json({ error: "Old password incorrect" });
-
-    user.password = await hashPassword(newPassword);
-    persist();
-    audit({ type: "security.password_changed", summary: "Password changed", actorId: user.id, targetUserId: user.id, req, meta: {} });
-    res.json({ ok: true });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Server error" });
+  function money(n){
+    const x = Number(n || 0);
+    return x.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
-});
-
-// ---------- logs ----------
-app.get("/api/logs/me", requireAuth, (req, res) => {
-  const limit = Math.max(1, Math.min(500, Number(req.query.limit || 200)));
-  const items = db.audit
-    .filter(x => x.targetUserId === req.user.id || x.actorId === req.user.id)
-    .slice(-limit)
-    .reverse();
-  res.json({ items });
-});
-
-// ---------- wallet ----------
-app.get("/api/wallet/balances", requireAuth, (req, res) => {
-  res.json({ balances: ensureBalance(req.user.id) });
-});
-
-app.post("/api/wallet/topup/create", requireAuth, (req, res) => {
-  const amount = Number(req.body.amount);
-  const currency = String(req.body.currency || "USD").toUpperCase();
-  const provider = String(req.body.provider || "").toLowerCase();
-  const method = String(req.body.method || "").toLowerCase();
-
-  if (!(amount > 0) || !Number.isFinite(amount)) return res.status(400).json({ error: "Invalid amount" });
-  if (!validateCurrency(currency)) return res.status(400).json({ error: "Unsupported currency" });
-  if (!validateProvider(provider)) return res.status(400).json({ error: "Unsupported provider" });
-  if (!validateMethod(provider, method)) return res.status(400).json({ error: "Unsupported method" });
-
-  if (provider === "platega" && method === "sbp" && currency !== "RUB") {
-    return res.status(400).json({ error: "SBP works with RUB only" });
+  function escapeHtml(s){
+    return String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function toast(title, msg, actions=[]){
+    const wrap = $("#toastWrap");
+    const el = document.createElement("div");
+    el.className = "toast";
+    el.innerHTML = `
+      <div class="t">${escapeHtml(title)}</div>
+      <div class="m">${escapeHtml(msg)}</div>
+      <div class="mini"></div>
+    `;
+    const mini = $(".mini", el);
+    actions.forEach(a => {
+      const b = document.createElement("span");
+      b.className = "link";
+      b.textContent = a.label;
+      b.onclick = () => { try{ a.onClick?.(); } finally { el.remove(); } };
+      mini.appendChild(b);
+    });
+    wrap.appendChild(el);
+    setTimeout(() => el.remove(), 6500);
   }
 
-  const id = rid("inv");
-  const inv = {
-    id,
-    userId: req.user.id,
-    amount: round2(amount),
-    currency,
-    provider,
-    method,
-    status: "created",
-    payUrl: buildPayUrl(provider, method, id),
-    createdAt: now(),
-    paidAt: null
-  };
-  db.topups[id] = inv;
-  persist();
-
-  audit({
-    type: "wallet.topup_created",
-    summary: "Topup invoice created",
-    actorId: req.user.id,
-    targetUserId: req.user.id,
-    req,
-    meta: { invoiceId: id, amount: inv.amount, currency, provider, method }
-  });
-
-  res.json(inv);
-});
-
-app.get("/api/wallet/topup/status", requireAuth, (req, res) => {
-  const id = String(req.query.id || "");
-  const inv = db.topups[id];
-  if (!inv) return res.status(404).json({ error: "Invoice not found" });
-  if (inv.userId !== req.user.id && req.user.role !== "admin") return res.status(403).json({ error: "Forbidden" });
-  res.json({ id: inv.id, status: inv.status });
-});
-
-// DEV helper: mark invoice paid (admin). Remove/guard in production.
-app.post("/api/dev/mark-paid", requireAuth, requireAdmin, (req, res) => {
-  const invoiceId = String(req.body.invoiceId || "");
-  const inv = db.topups[invoiceId];
-  if (!inv) return res.status(404).json({ error: "Invoice not found" });
-  if (inv.status === "paid") return res.json({ ok: true });
-
-  inv.status = "paid";
-  inv.paidAt = now();
-
-  const bal = ensureBalance(inv.userId);
-  bal[inv.currency] = round2(bal[inv.currency] + inv.amount);
-  persist();
-
-  audit({
-    type: "wallet.topup_paid",
-    summary: "Topup paid",
-    actorId: req.user.id,
-    targetUserId: inv.userId,
-    req,
-    meta: { invoiceId: inv.id, amount: inv.amount, currency: inv.currency, provider: inv.provider, method: inv.method }
-  });
-
-  res.json({ ok: true });
-});
-
-app.post("/api/wallet/withdraw", requireAuth, (req, res) => {
-  const amount = Number(req.body.amount);
-  const currency = String(req.body.currency || "USD").toUpperCase();
-  const destination = String(req.body.destination || "").trim();
-  const note = String(req.body.note || "").trim();
-
-  if (!(amount > 0) || !Number.isFinite(amount)) return res.status(400).json({ error: "Invalid amount" });
-  if (!validateCurrency(currency)) return res.status(400).json({ error: "Unsupported currency" });
-  if (!destination) return res.status(400).json({ error: "Destination required" });
-
-  const bal = ensureBalance(req.user.id);
-  if (bal[currency] < amount) return res.status(400).json({ error: "Insufficient funds" });
-
-  bal[currency] = round2(bal[currency] - amount);
-
-  const id = rid("wd");
-  db.withdrawals[id] = { id, userId: req.user.id, amount: round2(amount), currency, destination: clampStr(destination, 120), note: clampStr(note, 160), status: "pending", createdAt: now() };
-  persist();
-
-  audit({
-    type: "wallet.withdraw_requested",
-    summary: "Withdraw requested (pending)",
-    actorId: req.user.id,
-    targetUserId: req.user.id,
-    req,
-    meta: { withdrawId: id, amount, currency, destination: clampStr(destination, 80) }
-  });
-
-  res.json({ ok: true, id, status: "pending" });
-});
-
-// ---------- deals ----------
-app.get("/api/deals", requireAuth, (req, res) => {
-  const me = req.user;
-  const items = Object.values(db.deals)
-    .filter(d => d.buyerId === me.id || d.sellerId === me.id || me.role === "admin")
-    .sort((a,b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt))
-    .slice(0, 500)
-    .map(dealToClient);
-  res.json({ items });
-});
-
-app.post("/api/deals", requireAuth, (req, res) => {
-  const me = req.user;
-
-  const type = String(req.body.type || "buy"); // buy/sell
-  const counterparty = String(req.body.counterparty || "").trim();
-  const title = String(req.body.title || "").trim();
-  const currency = String(req.body.currency || "USD").toUpperCase();
-  const amount = Number(req.body.amount);
-  const note = String(req.body.note || "").trim();
-
-  if (!["buy","sell"].includes(type)) return res.status(400).json({ error: "Invalid type" });
-  if (!counterparty) return res.status(400).json({ error: "Counterparty required" });
-  if (!title || title.length < 3) return res.status(400).json({ error: "Title too short" });
-  if (!validateCurrency(currency)) return res.status(400).json({ error: "Unsupported currency" });
-  if (!(amount > 0) || !Number.isFinite(amount)) return res.status(400).json({ error: "Invalid amount" });
-
-  const other = counterparty.includes("@") ? getUserByEmail(counterparty) : getUserByUsername(counterparty);
-  if (!other) return res.status(404).json({ error: "User not found" });
-  if (other.isBanned) return res.status(400).json({ error: "User not available" });
-  if (other.id === me.id) return res.status(400).json({ error: "Cannot create deal with yourself" });
-
-  const buyerId = (type === "buy") ? me.id : other.id;
-  const sellerId = (type === "sell") ? me.id : other.id;
-
-  const id = rid("deal");
-  const deal = {
-    id,
-    title: clampStr(title, 120),
-    note: clampStr(note, 240),
-    amount: round2(amount),
-    currency,
-    status: "created",
-    buyerId,
-    sellerId,
-    escrow: { amount: 0, currency, funded: false },
-    createdAt: now(),
-    updatedAt: now()
-  };
-  db.deals[id] = deal;
-  ensureDealMessages(id);
-  persist();
-
-  audit({
-    type: "deal.created",
-    summary: `Deal created: ${deal.title}`,
-    actorId: me.id,
-    targetUserId: other.id,
-    req,
-    meta: { dealId: id, amount: deal.amount, currency, buyerId, sellerId }
-  });
-
-  res.json({ ok: true, id });
-});
-
-app.get("/api/deals/:id", requireAuth, (req, res) => {
-  const deal = getDealOr404(req.params.id);
-  if (!deal) return res.status(404).json({ error: "Deal not found" });
-  if (!assertDealAccess(req, res, deal)) return;
-  res.json({ deal: dealToClient(deal) });
-});
-
-app.post("/api/deals/:id/fund", requireAuth, (req, res) => {
-  const deal = getDealOr404(req.params.id);
-  if (!deal) return res.status(404).json({ error: "Deal not found" });
-  if (!assertDealAccess(req, res, deal)) return;
-
-  if (deal.status !== "created") return res.status(400).json({ error: "Deal is not fundable" });
-  if (req.user.id !== deal.buyerId && req.user.role !== "admin") return res.status(403).json({ error: "Only buyer can fund" });
-
-  const bal = ensureBalance(deal.buyerId);
-  if (bal[deal.currency] < deal.amount) return res.status(400).json({ error: "Insufficient funds in wallet" });
-
-  bal[deal.currency] = round2(bal[deal.currency] - deal.amount);
-  deal.escrow = { amount: deal.amount, currency: deal.currency, funded: true };
-  deal.status = "funded";
-  deal.updatedAt = now();
-  persist();
-
-  audit({
-    type: "deal.funded",
-    summary: "Deal funded (escrow)",
-    actorId: req.user.id,
-    targetUserId: deal.buyerId,
-    req,
-    meta: { dealId: deal.id, amount: deal.amount, currency: deal.currency }
-  });
-
-  res.json({ ok: true });
-});
-
-app.post("/api/deals/:id/mark-delivered", requireAuth, (req, res) => {
-  const deal = getDealOr404(req.params.id);
-  if (!deal) return res.status(404).json({ error: "Deal not found" });
-  if (!assertDealAccess(req, res, deal)) return;
-
-  if (deal.status !== "funded") return res.status(400).json({ error: "Deal is not in funded state" });
-  if (req.user.id !== deal.sellerId && req.user.role !== "admin") return res.status(403).json({ error: "Only seller can mark delivered" });
-
-  deal.status = "delivered";
-  deal.updatedAt = now();
-  persist();
-
-  audit({
-    type: "deal.delivered",
-    summary: "Seller marked delivered",
-    actorId: req.user.id,
-    targetUserId: deal.sellerId,
-    req,
-    meta: { dealId: deal.id }
-  });
-
-  res.json({ ok: true });
-});
-
-app.post("/api/deals/:id/confirm", requireAuth, (req, res) => {
-  const deal = getDealOr404(req.params.id);
-  if (!deal) return res.status(404).json({ error: "Deal not found" });
-  if (!assertDealAccess(req, res, deal)) return;
-
-  if (deal.status !== "delivered") return res.status(400).json({ error: "Deal is not deliver-confirmable" });
-  if (req.user.id !== deal.buyerId && req.user.role !== "admin") return res.status(403).json({ error: "Only buyer can confirm" });
-
-  if (!deal.escrow || !deal.escrow.funded || deal.escrow.amount !== deal.amount) {
-    return res.status(400).json({ error: "Escrow state invalid" });
+  async function api(path, {method="GET", body, headers={}} = {}){
+    const res = await fetch(path, {
+      method,
+      headers: { "Content-Type":"application/json", ...headers },
+      credentials: "include",
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const ct = res.headers.get("content-type") || "";
+    const data = ct.includes("application/json") ? await res.json().catch(() => ({})) : await res.text().catch(()=> "");
+    if(!res.ok){
+      const msg = (data && data.error) ? data.error : (typeof data === "string" ? data : "Request failed");
+      throw new Error(msg);
+    }
+    return data;
   }
 
-  const sellerBal = ensureBalance(deal.sellerId);
-  sellerBal[deal.currency] = round2(sellerBal[deal.currency] + deal.amount);
+  const state = { me:null, balances:null, deals:[], invoice:null, payKind:"crypto", adminUsers:[] };
 
-  deal.escrow = { amount: 0, currency: deal.currency, funded: false };
-  deal.status = "completed";
-  deal.updatedAt = now();
-  persist();
+  const routes = ["home","auth","profile","deals","admin"];
+  function setRoute(route){ if(!routes.includes(route)) route="home"; location.hash = "#/" + route; }
+  function getRoute(){ const m = (location.hash || "").match(/^#\\/([a-z]+)/i); return m ? m[1] : "home"; }
+  function renderRoute(){
+    const r = getRoute();
+    $("#title").textContent =
+      r === "home" ? "Главная" :
+      r === "auth" ? "Войти" :
+      r === "deals" ? "Сделки" :
+      r === "profile" ? "Кошелёк" : "Админка";
+    $("#subtitle").textContent =
+      r === "home" ? "Сделки, чат и кошелёк — всё в одном." :
+      r === "auth" ? "Вход / регистрация" :
+      r === "deals" ? "Список сделок и чат по каждой сделке" :
+      r === "profile" ? "Баланс, пополнение, вывод и безопасность" :
+      "Пользователи и системные логи";
 
-  audit({
-    type: "deal.completed",
-    summary: "Deal completed (escrow released)",
-    actorId: req.user.id,
-    targetUserId: deal.sellerId,
-    req,
-    meta: { dealId: deal.id, amount: deal.amount, currency: deal.currency }
+    $$("#nav a").forEach(a => a.classList.toggle("active", a.dataset.route === r));
+    $("#view-home").classList.toggle("hidden", r !== "home");
+    $("#view-auth").classList.toggle("hidden", r !== "auth");
+    $("#view-deals").classList.toggle("hidden", r !== "deals");
+    $("#view-profile").classList.toggle("hidden", r !== "profile");
+    $("#view-admin").classList.toggle("hidden", r !== "admin");
+
+    if((r === "profile" || r === "deals") && !state.me) setRoute("auth");
+    if(r === "admin" && !(state.me && state.me.role === "admin")) setRoute("home");
+  }
+  window.addEventListener("hashchange", renderRoute);
+
+  function openModal(id){ $("#"+id).classList.add("show"); }
+  function closeModal(id){ $("#"+id).classList.remove("show"); }
+  $$(".backdrop").forEach(b => b.addEventListener("click", (e) => { if(e.target === b) b.classList.remove("show"); }));
+  $$("[data-close]").forEach(btn => btn.addEventListener("click", () => closeModal(btn.dataset.close)));
+
+  async function refreshHomeKpis(){
+    const box = $("#homeKpis");
+    box.innerHTML = "";
+    if(!state.me){
+      box.innerHTML = `
+        <div class="kpi"><div class="label">Статус</div><div class="value">Гость <small>•</small></div></div>
+        <div class="kpi"><div class="label">Сделок</div><div class="value">— <small>•</small></div></div>
+      `;
+      return;
+    }
+    const dealsCount = (state.deals || []).length;
+    box.innerHTML = `
+      <div class="kpi"><div class="label">Аккаунт</div><div class="value">${escapeHtml(state.me.username)} <small>${escapeHtml(state.me.role)}</small></div></div>
+      <div class="kpi"><div class="label">Сделок</div><div class="value">${dealsCount} <small>всего</small></div></div>
+    `;
+  }
+
+  async function refreshMe(){
+    try{ state.me = await api("/api/me"); }catch{ state.me = null; }
+    const authed = !!state.me;
+
+    $("#authPill").textContent = authed ? (state.me.username + (state.me.role === "admin" ? " • admin" : "")) : "Гость";
+    $("#logoutBtn").classList.toggle("hidden", !authed);
+
+    $("#navAuth").classList.toggle("hidden", authed);
+    $("#navDeals").classList.toggle("hidden", !authed);
+    $("#navProfile").classList.toggle("hidden", !authed);
+    $("#navAdmin").classList.toggle("hidden", !(authed && state.me.role === "admin"));
+
+    $("#topupBtnTop").classList.toggle("hidden", !authed);
+    $("#newDealBtnTop").classList.toggle("hidden", !authed);
+
+    $("#homeLoginBtn").classList.toggle("hidden", authed);
+    $("#homeDealsBtn").classList.toggle("hidden", !authed);
+    $("#homeWalletBtn").classList.toggle("hidden", !authed);
+    $("#homeNewDealBtn").classList.toggle("hidden", !authed);
+    $("#homeHint").textContent = authed ? "Откройте сделки или кошелёк." : "Войдите, чтобы видеть сделки и баланс.";
+
+    if(authed){
+      await loadDeals().catch(()=>{});
+      await loadBalances().catch(()=>{});
+      await loadRecentLogs().catch(()=>{});
+      if(state.me.role === "admin"){
+        await loadUsers().catch(()=>{});
+        await loadAdminLogs().catch(()=>{});
+      }
+    }else{
+      state.balances = null;
+      state.deals = [];
+      $("#balanceKpis").innerHTML = "";
+      $("#dealsTbody").innerHTML = "";
+      $("#recentLogs").innerHTML = "";
+      $("#usersTbody").innerHTML = "";
+      $("#adminLogs").innerHTML = "";
+    }
+    await refreshHomeKpis();
+    renderRoute();
+  }
+
+  $("#refreshBtn").addEventListener("click", refreshMe);
+
+  $("#loginBtn").addEventListener("click", async () => {
+    try{
+      const emailOrUsername = $("#loginId").value.trim();
+      const password = $("#loginPw").value;
+      if(!emailOrUsername || !password) return toast("Ошибка", "Заполни логин и пароль");
+      await api("/api/auth/login", { method:"POST", body:{ emailOrUsername, password }});
+      toast("Готово", "Ты вошёл");
+      setRoute("deals");
+      await refreshMe();
+    }catch(e){ toast("Не получилось", e.message); }
   });
 
-  res.json({ ok: true });
-});
-
-app.post("/api/deals/:id/cancel", requireAuth, (req, res) => {
-  const deal = getDealOr404(req.params.id);
-  if (!deal) return res.status(404).json({ error: "Deal not found" });
-  if (!assertDealAccess(req, res, deal)) return;
-
-  const isParticipant = req.user.id === deal.buyerId || req.user.id === deal.sellerId;
-  const isAdmin = req.user.role === "admin";
-  if (!isParticipant && !isAdmin) return res.status(403).json({ error: "Forbidden" });
-
-  if (deal.status !== "created") return res.status(400).json({ error: "Only non-funded deals can be canceled" });
-
-  deal.status = "canceled";
-  deal.updatedAt = now();
-  persist();
-
-  audit({
-    type: "deal.canceled",
-    summary: "Deal canceled",
-    actorId: req.user.id,
-    targetUserId: (req.user.id === deal.buyerId ? deal.sellerId : deal.buyerId),
-    req,
-    meta: { dealId: deal.id }
+  $("#regBtn").addEventListener("click", async () => {
+    try{
+      const email = $("#regEmail").value.trim();
+      const username = $("#regUser").value.trim();
+      const password = $("#regPw").value;
+      if(!email || !username || !password) return toast("Ошибка", "Заполни email, username и пароль");
+      await api("/api/auth/register", { method:"POST", body:{ email, username, password }});
+      toast("Аккаунт создан", "Ты зарегистрирован и вошёл");
+      setRoute("deals");
+      await refreshMe();
+    }catch(e){ toast("Не получилось", e.message); }
   });
 
-  res.json({ ok: true });
-});
-
-app.post("/api/deals/:id/dispute", requireAuth, (req, res) => {
-  const deal = getDealOr404(req.params.id);
-  if (!deal) return res.status(404).json({ error: "Deal not found" });
-  if (!assertDealAccess(req, res, deal)) return;
-
-  if (!["funded","delivered"].includes(deal.status)) return res.status(400).json({ error: "Dispute not allowed in this state" });
-
-  deal.status = "disputed";
-  deal.updatedAt = now();
-  persist();
-
-  audit({
-    type: "deal.disputed",
-    summary: "Dispute opened",
-    actorId: req.user.id,
-    targetUserId: (req.user.id === deal.buyerId ? deal.sellerId : deal.buyerId),
-    req,
-    meta: { dealId: deal.id }
+  $("#demoBtn").addEventListener("click", () => {
+    $("#loginId").value = "admin@onlymarket.local";
+    $("#loginPw").value = "admin12345";
+    toast("Демо", "Если база пустая — демо-админ создаётся автоматически. Нажми “Войти”.");
   });
 
-  res.json({ ok: true });
-});
-
-app.get("/api/deals/:id/messages", requireAuth, (req, res) => {
-  const deal = getDealOr404(req.params.id);
-  if (!deal) return res.status(404).json({ error: "Deal not found" });
-  if (!assertDealAccess(req, res, deal)) return;
-
-  const limit = Math.max(1, Math.min(500, Number(req.query.limit || 120)));
-  const items = ensureDealMessages(deal.id).slice(-limit).map(m => ({
-    id: m.id,
-    dealId: m.dealId,
-    ts: m.ts,
-    userId: m.userId,
-    username: (getUserById(m.userId)?.username || "user"),
-    text: m.text
-  }));
-  res.json({ items });
-});
-
-app.post("/api/deals/:id/messages", requireAuth, (req, res) => {
-  const deal = getDealOr404(req.params.id);
-  if (!deal) return res.status(404).json({ error: "Deal not found" });
-  if (!assertDealAccess(req, res, deal)) return;
-
-  const text = String(req.body.text || "").trim();
-  if (!text) return res.status(400).json({ error: "Message empty" });
-  if (text.length > 2000) return res.status(400).json({ error: "Message too long" });
-
-  const msg = { id: rid("msg"), dealId: deal.id, ts: now(), userId: req.user.id, text };
-  ensureDealMessages(deal.id).push(msg);
-  persist();
-
-  audit({
-    type: "chat.message",
-    summary: "Message sent",
-    actorId: req.user.id,
-    targetUserId: (req.user.id === deal.buyerId ? deal.sellerId : deal.buyerId),
-    req,
-    meta: { dealId: deal.id, messageId: msg.id }
+  $("#logoutBtn").addEventListener("click", async () => {
+    try{
+      await api("/api/auth/logout", { method:"POST" });
+      toast("Ок", "Ты вышел");
+      setRoute("home");
+      await refreshMe();
+    }catch(e){ toast("Ошибка", e.message); }
   });
 
-  res.json({ ok: true, id: msg.id });
-});
+  async function loadBalances(){
+    const bal = await api("/api/wallet/balances");
+    state.balances = bal.balances || {};
+    const kpis = $("#balanceKpis");
+    kpis.innerHTML = "";
+    const entries = Object.entries(state.balances);
+    if(!entries.length){
+      kpis.innerHTML = `<div class="kpi"><div class="label">Баланс</div><div class="value">0.00 <small>USD</small></div></div>`;
+      return;
+    }
+    entries.forEach(([cur, val]) => {
+      const div = document.createElement("div");
+      div.className = "kpi";
+      div.innerHTML = `<div class="label">${escapeHtml(cur)}</div><div class="value">${money(val)} <small>${escapeHtml(cur)}</small></div>`;
+      kpis.appendChild(div);
+    });
+  }
 
-// ---------- admin ----------
-app.get("/api/admin/users", requireAuth, requireAdmin, (req, res) => {
-  const items = db.users.map(safeUser);
-  res.json({ items });
-});
+  function resetTopup(){
+    $("#invoiceCard").classList.add("hidden");
+    state.invoice = null;
+    $("#topupAmount").value = "";
+    state.payKind = "crypto";
+    $$("#payGrid .payOpt").forEach(el => el.classList.toggle("active", el.dataset.kind === "crypto"));
+  }
 
-app.get("/api/admin/users/:id", requireAuth, requireAdmin, (req, res) => {
-  const id = req.params.id;
-  const u = getUserById(id);
-  if (!u) return res.status(404).json({ error: "User not found" });
-  res.json({ user: safeUser(u), balances: ensureBalance(u.id) });
-});
+  $("#topupBtnTop").addEventListener("click", () => { resetTopup(); openModal("topupModal"); });
+  $("#topupBtn2").addEventListener("click", () => $("#topupBtnTop").click());
 
-app.get("/api/admin/users/:id/logs", requireAuth, requireAdmin, (req, res) => {
-  const id = req.params.id;
-  const limit = Math.max(1, Math.min(1000, Number(req.query.limit || 200)));
-  const items = db.audit.filter(x => x.targetUserId === id || x.actorId === id).slice(-limit).reverse();
-  res.json({ items });
-});
-
-app.get("/api/admin/users/:id/deals", requireAuth, requireAdmin, (req, res) => {
-  const id = req.params.id;
-  const limit = Math.max(1, Math.min(1000, Number(req.query.limit || 200)));
-  const items = Object.values(db.deals)
-    .filter(d => d.buyerId === id || d.sellerId === id)
-    .sort((a,b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt))
-    .slice(0, limit)
-    .map(dealToClient);
-  res.json({ items });
-});
-
-app.post("/api/admin/users/:id/adjust-balance", requireAuth, requireAdmin, (req, res) => {
-  const id = req.params.id;
-  const currency = String(req.body.currency || "USD").toUpperCase();
-  const delta = Number(req.body.delta);
-  const reason = String(req.body.reason || "").trim();
-
-  if (!validateCurrency(currency)) return res.status(400).json({ error: "Unsupported currency" });
-  if (!Number.isFinite(delta) || delta === 0) return res.status(400).json({ error: "Invalid delta" });
-
-  const u = getUserById(id);
-  if (!u) return res.status(404).json({ error: "User not found" });
-
-  const bal = ensureBalance(id);
-  bal[currency] = round2(bal[currency] + delta);
-  persist();
-
-  audit({
-    type: "admin.adjust_balance",
-    summary: "Admin adjusted balance",
-    actorId: req.user.id,
-    targetUserId: id,
-    req,
-    meta: { currency, delta: round2(delta), reason: clampStr(reason, 160) }
+  $$("#payGrid .payOpt").forEach(el => {
+    el.addEventListener("click", () => {
+      state.payKind = el.dataset.kind;
+      $$("#payGrid .payOpt").forEach(x => x.classList.toggle("active", x === el));
+      if(state.payKind === "sbp") $("#topupCurrency").value = "RUB";
+    });
   });
 
-  res.json({ ok: true, balances: bal });
-});
+  function mapPay(kind){
+    if(kind === "crypto") return { provider:"cryptobot", method:"crypto" };
+    if(kind === "sbp") return { provider:"platega", method:"sbp" };
+    return { provider:"platega", method:"card" };
+  }
 
-app.post("/api/admin/users/:id/ban", requireAuth, requireAdmin, (req, res) => {
-  const id = req.params.id;
-  const isBanned = !!req.body.isBanned;
+  $("#createTopupBtn").addEventListener("click", async () => {
+    try{
+      const amount = Number(String($("#topupAmount").value).replace(",", "."));
+      const currency = $("#topupCurrency").value;
+      if(!(amount > 0)) return toast("Ошибка", "Сумма должна быть больше 0");
+      if(state.payKind === "sbp" && currency !== "RUB") return toast("Ошибка", "СБП работает только с RUB");
 
-  const u = getUserById(id);
-  if (!u) return res.status(404).json({ error: "User not found" });
-  if (u.id === req.user.id) return res.status(400).json({ error: "Cannot ban yourself" });
+      const pm = mapPay(state.payKind);
+      const inv = await api("/api/wallet/topup/create", { method:"POST", body: { amount, currency, ...pm }});
+      state.invoice = inv;
 
-  u.isBanned = isBanned;
-  persist();
-
-  audit({
-    type: "admin.ban_toggle",
-    summary: isBanned ? "User banned" : "User unbanned",
-    actorId: req.user.id,
-    targetUserId: id,
-    req,
-    meta: { isBanned }
+      $("#invoiceText").textContent = `ID: ${inv.id} • ${money(inv.amount)} ${inv.currency}`;
+      $("#payLink").href = inv.payUrl;
+      $("#invoiceCard").classList.remove("hidden");
+      toast("Счёт создан", "Открой оплату, затем нажми “Проверить статус”.");
+    }catch(e){ toast("Ошибка", e.message); }
   });
 
-  res.json({ ok: true });
-});
-
-app.post("/api/admin/users/:id/set-role", requireAuth, requireAdmin, (req, res) => {
-  const id = req.params.id;
-  const role = String(req.body.role || "user");
-  if (!["user", "admin"].includes(role)) return res.status(400).json({ error: "Invalid role" });
-
-  const u = getUserById(id);
-  if (!u) return res.status(404).json({ error: "User not found" });
-
-  u.role = role;
-  persist();
-
-  audit({
-    type: "admin.set_role",
-    summary: "Role changed",
-    actorId: req.user.id,
-    targetUserId: id,
-    req,
-    meta: { role }
+  $("#checkInvoiceBtn").addEventListener("click", async () => {
+    try{
+      if(!state.invoice) return;
+      const st = await api("/api/wallet/topup/status?id=" + encodeURIComponent(state.invoice.id));
+      if(st.status === "paid"){
+        toast("Оплачено", "Баланс обновлён");
+        closeModal("topupModal");
+        await loadBalances();
+        await loadRecentLogs();
+      }else{
+        toast("Пока не оплачено", "Статус: " + st.status);
+      }
+    }catch(e){ toast("Ошибка", e.message); }
   });
 
-  res.json({ ok: true });
-});
-
-app.get("/api/admin/logs", requireAuth, requireAdmin, (req, res) => {
-  const limit = Math.max(1, Math.min(1000, Number(req.query.limit || 200)));
-  const items = db.audit.slice(-limit).reverse();
-  res.json({ items });
-});
-
-// ---------- start ----------
-bootstrapDemoAdmin().then(() => {
-  app.listen(PORT, HOST, () => {
-    console.log(`OnlyMarket server running on http://${HOST}:${PORT}`);
+  $("#withdrawBtn").addEventListener("click", () => {
+    $("#withdrawAmount").value = "";
+    $("#withdrawDest").value = "";
+    $("#withdrawNote").value = "";
+    openModal("withdrawModal");
   });
-});
+
+  $("#createWithdrawBtn").addEventListener("click", async () => {
+    try{
+      const currency = $("#withdrawCurrency").value;
+      const amount = Number(String($("#withdrawAmount").value).replace(",", "."));
+      const destination = ($("#withdrawDest").value || "").trim();
+      const note = ($("#withdrawNote").value || "").trim();
+      if(!(amount > 0)) return toast("Ошибка", "Некорректная сумма");
+      if(!destination) return toast("Ошибка", "Укажи реквизиты");
+      const r = await api("/api/wallet/withdraw", { method:"POST", body:{ currency, amount, destination, note }});
+      toast("Заявка создана", "Статус: " + r.status + " • ID: " + r.id);
+      closeModal("withdrawModal");
+      await loadBalances();
+      await loadRecentLogs();
+    }catch(e){ toast("Ошибка", e.message); }
+  });
+
+  async function loadRecentLogs(){
+    const res = await api("/api/logs/me?limit=10");
+    const box = $("#recentLogs");
+    const items = res.items || [];
+    if(!items.length){ box.innerHTML = `<p class="muted">Пока пусто.</p>`; return; }
+    const table = document.createElement("table");
+    table.innerHTML = `<thead><tr><th style="width:190px;">Время</th><th style="width:220px;">Тип</th><th>Описание</th></tr></thead><tbody></tbody>`;
+    const tb = table.querySelector("tbody");
+    items.forEach(it => {
+      const tr = document.createElement("tr");
+      tr.style.cursor="pointer";
+      tr.innerHTML = `<td class="mono">${escapeHtml(fmtTs(it.ts))}</td><td><span class="badge">${escapeHtml(it.type)}</span></td><td class="muted">${escapeHtml(it.summary || "")}</td>`;
+      tr.addEventListener("click", () => showLogDetail(it));
+      tb.appendChild(tr);
+    });
+    box.innerHTML = "";
+    box.appendChild(table);
+  }
+
+  $("#logsBtn").addEventListener("click", async () => {
+    try{
+      const res = await api("/api/logs/me?limit=250");
+      renderLogsModal(res.items || []);
+      openModal("logsModal");
+    }catch(e){ toast("Ошибка", e.message); }
+  });
+
+  function renderLogsModal(items){
+    const box = $("#logsTable");
+    if(!items.length){ box.innerHTML = `<p class="muted">Пока пусто.</p>`; return; }
+    const table = document.createElement("table");
+    table.innerHTML = `<thead><tr><th style="width:190px;">Время</th><th style="width:220px;">Тип</th><th>Детали</th></tr></thead><tbody></tbody>`;
+    const tb = table.querySelector("tbody");
+    items.forEach(it => {
+      const tr = document.createElement("tr");
+      tr.style.cursor="pointer";
+      tr.innerHTML = `<td class="mono">${escapeHtml(fmtTs(it.ts))}</td><td><span class="badge">${escapeHtml(it.type)}</span></td><td class="muted">${escapeHtml(it.summary || "")}</td>`;
+      tr.addEventListener("click", () => showLogDetail(it));
+      tb.appendChild(tr);
+    });
+    box.innerHTML = "";
+    box.appendChild(table);
+  }
+
+  function showLogDetail(it){
+    $("#logDetailTitle").textContent = it.type;
+    $("#logDetailMeta").textContent = `${fmtTs(it.ts)} • actor: ${it.actorId || "-"} • target: ${it.targetUserId || "-"}`;
+    $("#logDetailJson").textContent = JSON.stringify(it, null, 2);
+    openModal("logDetailModal");
+  }
+
+  $("#changePwBtn").addEventListener("click", async () => {
+    try{
+      const oldPassword = $("#oldPw").value;
+      const newPassword = $("#newPw").value;
+      if(!oldPassword || !newPassword) return toast("Ошибка", "Заполни оба поля");
+      await api("/api/security/change-password", { method:"POST", body:{ oldPassword, newPassword }});
+      $("#oldPw").value = "";
+      $("#newPw").value = "";
+      toast("Готово", "Пароль обновлён");
+      await loadRecentLogs();
+    }catch(e){ toast("Ошибка", e.message); }
+  });
+
+  async function loadDeals(){
+    const res = await api("/api/deals");
+    state.deals = res.items || [];
+    renderDealsTable();
+    await refreshHomeKpis();
+  }
+
+  function statusBadge(st){
+    const s = String(st || "created");
+    if(s === "created") return `<span class="badge">created</span>`;
+    if(s === "funded") return `<span class="badge warn">funded</span>`;
+    if(s === "delivered") return `<span class="badge warn">delivered</span>`;
+    if(s === "completed") return `<span class="badge good">completed</span>`;
+    if(s === "canceled") return `<span class="badge bad">canceled</span>`;
+    if(s === "disputed") return `<span class="badge bad">disputed</span>`;
+    return `<span class="badge">${escapeHtml(s)}</span>`;
+  }
+
+  function renderDealsTable(){
+    const tb = $("#dealsTbody");
+    tb.innerHTML = "";
+    const items = state.deals || [];
+    if(!items.length){
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="6" class="muted">Сделок пока нет.</td>`;
+      tb.appendChild(tr);
+      return;
+    }
+    items.forEach(d => {
+      const tr = document.createElement("tr");
+      tr.style.cursor="pointer";
+      tr.innerHTML = `
+        <td class="mono">${escapeHtml(d.id)}</td>
+        <td><div style="font-weight:800">${escapeHtml(d.title || "Сделка")}</div><div class="muted" style="margin-top:4px;">${escapeHtml(d.note || "")}</div></td>
+        <td class="mono">${money(d.amount)} ${escapeHtml(d.currency)}</td>
+        <td>${statusBadge(d.status)}</td>
+        <td class="muted">${escapeHtml(d.buyerUsername)} ↔ ${escapeHtml(d.sellerUsername)}</td>
+        <td class="mono muted">${escapeHtml(fmtTs(d.updatedAt))}</td>
+      `;
+      tr.addEventListener("click", () => openDeal(d.id));
+      tb.appendChild(tr);
+    });
+  }
+
+  $("#refreshDealsBtn").addEventListener("click", async () => {
+    try{ await loadDeals(); toast("Ок", "Сделки обновлены"); }catch(e){ toast("Ошибка", e.message); }
+  });
+
+  function openNewDeal(){
+    $("#dealType").value = "buy";
+    $("#dealCounterparty").value = "";
+    $("#dealTitle").value = "";
+    $("#dealCurrency").value = "USD";
+    $("#dealAmount").value = "";
+    $("#dealNote").value = "";
+    openModal("newDealModal");
+  }
+  $("#newDealBtn").addEventListener("click", openNewDeal);
+  $("#newDealBtnTop").addEventListener("click", openNewDeal);
+  $("#homeNewDealBtn").addEventListener("click", openNewDeal);
+
+  $("#createDealBtn").addEventListener("click", async () => {
+    try{
+      const type = $("#dealType").value;
+      const counterparty = $("#dealCounterparty").value.trim();
+      const title = $("#dealTitle").value.trim();
+      const currency = $("#dealCurrency").value;
+      const amount = Number(String($("#dealAmount").value).replace(",", "."));
+      const note = $("#dealNote").value.trim();
+      if(!counterparty) return toast("Ошибка", "Укажи пользователя");
+      if(!title) return toast("Ошибка", "Укажи название");
+      if(!(amount > 0)) return toast("Ошибка", "Некорректная сумма");
+      await api("/api/deals", { method:"POST", body:{ type, counterparty, title, currency, amount, note }});
+      closeModal("newDealModal");
+      toast("Сделка создана", "Открой и продолжай");
+      await loadDeals();
+      setRoute("deals");
+    }catch(e){ toast("Ошибка", e.message); }
+  });
+
+  async function openDeal(id){
+    try{
+      const deal = await api("/api/deals/" + encodeURIComponent(id));
+      renderDealModal(deal);
+      openModal("dealModal");
+      await refreshDealMessages(id);
+    }catch(e){ toast("Ошибка", e.message); }
+  }
+
+  function renderDealModal(data){
+    const d = data.deal;
+    $("#dealModalTitle").textContent = `Сделка • ${d.id}`;
+    const meId = state.me?.id;
+    const isBuyer = meId === d.buyerId;
+    const isSeller = meId === d.sellerId;
+
+    const canFund = isBuyer && d.status === "created";
+    const canMarkDelivered = isSeller && d.status === "funded";
+    const canConfirm = isBuyer && d.status === "delivered";
+    const canCancel = (isBuyer || isSeller) && d.status === "created";
+    const canDispute = (isBuyer || isSeller) && (d.status === "funded" || d.status === "delivered");
+
+    const esc = d.escrow || { amount: 0, currency: d.currency, funded: false };
+
+    const body = document.createElement("div");
+    body.innerHTML = `
+      <div class="grid2">
+        <div class="card">
+          <h3>Детали</h3>
+          <p class="muted">
+            <span class="badge">${escapeHtml(d.status)}</span>
+            <span class="mono" style="margin-left:8px;">${escapeHtml(fmtTs(d.createdAt))}</span>
+          </p>
+          <div style="height:10px"></div>
+          <div class="kpis">
+            <div class="kpi"><div class="label">Сумма</div><div class="value">${money(d.amount)} <small>${escapeHtml(d.currency)}</small></div></div>
+            <div class="kpi"><div class="label">Эскроу</div><div class="value">${money(esc.amount || 0)} <small>${escapeHtml(esc.currency || d.currency)}</small></div></div>
+          </div>
+          <p style="margin-top:10px;"><b>${escapeHtml(d.title)}</b></p>
+          ${d.note ? `<p class="muted">${escapeHtml(d.note)}</p>` : `<p class="muted">Без комментариев.</p>`}
+          <p class="muted" style="margin-top:10px;">
+            Покупатель: <b>${escapeHtml(d.buyerUsername)}</b><br>
+            Продавец: <b>${escapeHtml(d.sellerUsername)}</b>
+          </p>
+
+          <div class="actions">
+            <button class="btn primary ${canFund ? "" : "hidden"}" id="dealFundBtn">Внести деньги в сделку</button>
+            <button class="btn primary ${canMarkDelivered ? "" : "hidden"}" id="dealDeliverBtn">Отметить доставку</button>
+            <button class="btn primary ${canConfirm ? "" : "hidden"}" id="dealConfirmBtn">Подтвердить получение</button>
+
+            <button class="btn danger ${canDispute ? "" : "hidden"}" id="dealDisputeBtn">Открыть спор</button>
+            <button class="btn danger ${canCancel ? "" : "hidden"}" id="dealCancelBtn">Отменить</button>
+          </div>
+
+          <p class="muted" style="margin-top:10px;">
+            Внести деньги можно только из кошелька. Если денег не хватает — пополни.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>Чат по сделке</h3>
+          <p class="muted">Все сообщения сохраняются.</p>
+
+          <div class="chatBox" style="margin-top:10px;">
+            <div class="chatLog" id="chatLog"></div>
+            <div class="chatSend">
+              <textarea class="textarea" id="chatText" placeholder="Сообщение..."></textarea>
+              <button class="btn primary" id="chatSendBtn">Отправить</button>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="btn" id="chatRefreshBtn">Обновить чат</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    $("#dealModalBody").innerHTML = "";
+    $("#dealModalBody").appendChild(body);
+
+    const wire = (btnId, fn) => { const el = $("#"+btnId); if(el) el.onclick = fn; };
+
+    wire("dealFundBtn", async () => {
+      try{
+        await api(`/api/deals/${encodeURIComponent(d.id)}/fund`, { method:"POST" });
+        toast("Готово", "Деньги внесены в сделку");
+        await loadBalances();
+        await loadDeals();
+        await openDeal(d.id);
+      }catch(e){
+        toast("Ошибка", e.message, [{ label:"Пополнить", onClick:()=> $("#topupBtnTop").click() }]);
+      }
+    });
+
+    wire("dealDeliverBtn", async () => {
+      try{
+        await api(`/api/deals/${encodeURIComponent(d.id)}/mark-delivered`, { method:"POST" });
+        toast("Ок", "Доставка отмечена");
+        await loadDeals();
+        await openDeal(d.id);
+      }catch(e){ toast("Ошибка", e.message); }
+    });
+
+    wire("dealConfirmBtn", async () => {
+      try{
+        await api(`/api/deals/${encodeURIComponent(d.id)}/confirm`, { method:"POST" });
+        toast("Завершено", "Сделка закрыта, деньги переведены");
+        await loadBalances();
+        await loadDeals();
+        await openDeal(d.id);
+      }catch(e){ toast("Ошибка", e.message); }
+    });
+
+    wire("dealCancelBtn", async () => {
+      try{
+        await api(`/api/deals/${encodeURIComponent(d.id)}/cancel`, { method:"POST" });
+        toast("Ок", "Сделка отменена");
+        await loadDeals();
+        await openDeal(d.id);
+      }catch(e){ toast("Ошибка", e.message); }
+    });
+
+    wire("dealDisputeBtn", async () => {
+      try{
+        await api(`/api/deals/${encodeURIComponent(d.id)}/dispute`, { method:"POST" });
+        toast("Спор", "Спор открыт");
+        await loadDeals();
+        await openDeal(d.id);
+      }catch(e){ toast("Ошибка", e.message); }
+    });
+
+    wire("chatSendBtn", async () => {
+      const text = ($("#chatText").value || "").trim();
+      if(!text) return;
+      $("#chatText").value = "";
+      try{
+        await api(`/api/deals/${encodeURIComponent(d.id)}/messages`, { method:"POST", body:{ text }});
+        await refreshDealMessages(d.id);
+      }catch(e){ toast("Ошибка", e.message); }
+    });
+
+    wire("chatRefreshBtn", async () => refreshDealMessages(d.id));
+  }
+
+  async function refreshDealMessages(dealId){
+    const res = await api(`/api/deals/${encodeURIComponent(dealId)}/messages?limit=120`);
+    const items = res.items || [];
+    const box = $("#chatLog");
+    if(!box) return;
+    box.innerHTML = "";
+    if(!items.length){ box.innerHTML = `<p class="muted">Сообщений нет.</p>`; return; }
+    items.reverse().forEach(m => {
+      const isMe = state.me && m.userId === state.me.id;
+      const div = document.createElement("div");
+      div.className = "msg " + (isMe ? "me" : "");
+      div.innerHTML = `
+        <div class="bubble">${escapeHtml(m.text)}</div>
+        <div class="msgMeta">
+          <span>${escapeHtml(m.username || "user")}</span>
+          <span class="mono">${escapeHtml(fmtTs(m.ts))}</span>
+        </div>
+      `;
+      box.appendChild(div);
+    });
+    box.scrollTop = box.scrollHeight;
+  }
+
+  async function loadUsers(){
+    const res = await api("/api/admin/users");
+    state.adminUsers = res.items || [];
+    renderUsers();
+  }
+  function renderUsers(){
+    const q = ($("#userSearch").value || "").trim().toLowerCase();
+    const items = (state.adminUsers || []).filter(u => {
+      if(!q) return true;
+      return [u.id,u.email,u.username].some(x => String(x||"").toLowerCase().includes(q));
+    });
+    const tb = $("#usersTbody");
+    tb.innerHTML = "";
+    items.forEach(u => {
+      const tr = document.createElement("tr");
+      tr.style.cursor="pointer";
+      const st = u.isBanned ? `<span class="badge bad">banned</span>` : `<span class="badge good">active</span>`;
+      tr.innerHTML = `
+        <td>
+          <div style="font-weight:800;">${escapeHtml(u.username)}</div>
+          <div class="muted mono" style="margin-top:4px;">${escapeHtml(u.email)} • ${escapeHtml(u.id)}</div>
+        </td>
+        <td><span class="badge">${escapeHtml(u.role)}</span></td>
+        <td>${st}</td>
+        <td class="mono">${escapeHtml(fmtTs(u.createdAt))}</td>
+      `;
+      tr.addEventListener("click", () => openAdminUser(u.id));
+      tb.appendChild(tr);
+    });
+    if(!items.length){
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="4" class="muted">Ничего не найдено.</td>`;
+      tb.appendChild(tr);
+    }
+  }
+  $("#userSearch").addEventListener("input", renderUsers);
+
+  async function openAdminUser(userId){
+    const prof = await api("/api/admin/users/" + encodeURIComponent(userId));
+    const logs = await api("/api/admin/users/" + encodeURIComponent(userId) + "/logs?limit=200");
+    const deals = await api("/api/admin/users/" + encodeURIComponent(userId) + "/deals?limit=200");
+
+    $("#adminUserTitle").textContent = `Профиль: ${prof.user.username}`;
+    const balances = prof.balances || {};
+    const balHtml = Object.entries(balances).map(([k,v]) => `
+      <div class="kpi"><div class="label">${escapeHtml(k)}</div><div class="value">${money(v)} <small>${escapeHtml(k)}</small></div></div>
+    `).join("") || `<p class="muted">Баланс пуст.</p>`;
+
+    const isBanned = !!prof.user.isBanned;
+
+    const body = document.createElement("div");
+    body.innerHTML = `
+      <div class="card">
+        <h3>Данные</h3>
+        <p class="muted mono">id: ${escapeHtml(prof.user.id)}<br>email: ${escapeHtml(prof.user.email)}<br>created: ${escapeHtml(fmtTs(prof.user.createdAt))}</p>
+        <div class="actions">
+          <button class="btn ${isBanned ? "" : "danger"}" id="banToggleBtn">${isBanned ? "Разбанить" : "Забанить"}</button>
+          <button class="btn" id="makeUserBtn">Роль: user</button>
+          <button class="btn" id="makeAdminBtn">Роль: admin</button>
+        </div>
+      </div>
+
+      <div style="height:12px"></div>
+
+      <div class="card">
+        <h3>Балансы</h3>
+        <div class="kpis">${balHtml}</div>
+        <div class="grid2" style="margin-top:12px;">
+          <div>
+            <div class="field">
+              <label>Валюта</label>
+              <select class="select" id="adjCur">
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+                <option value="RUB">RUB</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <div class="field">
+              <label>Сумма (delta)</label>
+              <input class="input" id="adjDelta" placeholder="например 10 или -5" inputmode="decimal">
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Причина</label>
+          <input class="input" id="adjReason" placeholder="коротко: компенсация / корректировка / …">
+        </div>
+        <div class="actions">
+          <button class="btn primary" id="adjBtn">Применить</button>
+        </div>
+      </div>
+
+      <div style="height:12px"></div>
+
+      <div class="card">
+        <h3>Сделки пользователя</h3>
+        <p class="muted">Клик → открыть сделку.</p>
+        <div id="adminUserDeals"></div>
+      </div>
+
+      <div style="height:12px"></div>
+
+      <div class="card">
+        <h3>Логи пользователя</h3>
+        <p class="muted">Клик → детали.</p>
+        <div id="adminUserLogs"></div>
+      </div>
+    `;
+
+    $("#adminUserBody").innerHTML = "";
+    $("#adminUserBody").appendChild(body);
+
+    const dItems = deals.items || [];
+    const dBox = $("#adminUserDeals");
+    if(!dItems.length){
+      dBox.innerHTML = `<p class="muted">Пусто.</p>`;
+    }else{
+      const t = document.createElement("table");
+      t.innerHTML = `<thead><tr><th style="width:170px;">ID</th><th>Название</th><th style="width:150px;">Сумма</th><th style="width:140px;">Статус</th><th style="width:190px;">Обновлено</th></tr></thead><tbody></tbody>`;
+      const tb = t.querySelector("tbody");
+      dItems.forEach(d => {
+        const tr = document.createElement("tr");
+        tr.style.cursor = "pointer";
+        tr.innerHTML = `
+          <td class="mono">${escapeHtml(d.id)}</td>
+          <td><div style="font-weight:800;">${escapeHtml(d.title)}</div><div class="muted" style="margin-top:4px;">${escapeHtml(d.note || "")}</div></td>
+          <td class="mono">${money(d.amount)} ${escapeHtml(d.currency)}</td>
+          <td>${statusBadge(d.status)}</td>
+          <td class="mono muted">${escapeHtml(fmtTs(d.updatedAt))}</td>
+        `;
+        tr.addEventListener("click", () => openDeal(d.id));
+        tb.appendChild(tr);
+      });
+      dBox.innerHTML = "";
+      dBox.appendChild(t);
+    }
+
+    const lItems = logs.items || [];
+    const lBox = $("#adminUserLogs");
+    if(!lItems.length){
+      lBox.innerHTML = `<p class="muted">Пусто.</p>`;
+    }else{
+      const t = document.createElement("table");
+      t.innerHTML = `<thead><tr><th style="width:190px;">Время</th><th style="width:220px;">Тип</th><th>Описание</th></tr></thead><tbody></tbody>`;
+      const tb = t.querySelector("tbody");
+      lItems.forEach(it => {
+        const tr = document.createElement("tr");
+        tr.style.cursor="pointer";
+        tr.innerHTML = `<td class="mono">${escapeHtml(fmtTs(it.ts))}</td><td><span class="badge">${escapeHtml(it.type)}</span></td><td class="muted">${escapeHtml(it.summary || "")}</td>`;
+        tr.addEventListener("click", () => showLogDetail(it));
+        tb.appendChild(tr);
+      });
+      lBox.innerHTML = "";
+      lBox.appendChild(t);
+    }
+
+    $("#banToggleBtn").onclick = async () => {
+      await api("/api/admin/users/" + encodeURIComponent(userId) + "/ban", { method:"POST", body:{ isBanned: !isBanned }});
+      toast("Готово", (!isBanned ? "Пользователь забанен" : "Пользователь разбанен"));
+      await loadUsers(); await loadAdminLogs();
+      await openAdminUser(userId);
+    };
+    $("#makeUserBtn").onclick = async () => {
+      await api("/api/admin/users/" + encodeURIComponent(userId) + "/set-role", { method:"POST", body:{ role: "user" }});
+      toast("Роль обновлена", "Теперь user");
+      await loadUsers(); await loadAdminLogs();
+      await openAdminUser(userId);
+    };
+    $("#makeAdminBtn").onclick = async () => {
+      await api("/api/admin/users/" + encodeURIComponent(userId) + "/set-role", { method:"POST", body:{ role: "admin" }});
+      toast("Роль обновлена", "Теперь admin");
+      await loadUsers(); await loadAdminLogs();
+      await openAdminUser(userId);
+    };
+    $("#adjBtn").onclick = async () => {
+      const currency = $("#adjCur").value;
+      const delta = Number(String($("#adjDelta").value).replace(",", "."));
+      const reason = ($("#adjReason").value || "").trim();
+      if(!(delta && Number.isFinite(delta))) return toast("Ошибка", "Укажи delta (например 10 или -5)");
+      await api("/api/admin/users/" + encodeURIComponent(userId) + "/adjust-balance", { method:"POST", body:{ currency, delta, reason }});
+      toast("Готово", "Баланс изменён");
+      await loadUsers(); await loadAdminLogs();
+      await openAdminUser(userId);
+    };
+
+    openModal("adminUserModal");
+  }
+
+  async function loadAdminLogs(){
+    const res = await api("/api/admin/logs?limit=120");
+    const items = res.items || [];
+    const box = $("#adminLogs");
+    if(!items.length){ box.innerHTML = `<p class="muted">Пусто.</p>`; return; }
+    const t = document.createElement("table");
+    t.innerHTML = `<thead><tr><th style="width:190px;">Время</th><th style="width:220px;">Тип</th><th style="width:220px;">Кто → кого</th><th>Описание</th></tr></thead><tbody></tbody>`;
+    const tb = t.querySelector("tbody");
+    items.forEach(it => {
+      const tr = document.createElement("tr");
+      tr.style.cursor="pointer";
+      tr.innerHTML = `
+        <td class="mono">${escapeHtml(fmtTs(it.ts))}</td>
+        <td><span class="badge">${escapeHtml(it.type)}</span></td>
+        <td class="mono muted">${escapeHtml(it.actorId || "-")} → ${escapeHtml(it.targetUserId || "-")}</td>
+        <td class="muted">${escapeHtml(it.summary || "")}</td>
+      `;
+      tr.addEventListener("click", () => showLogDetail(it));
+      tb.appendChild(tr);
+    });
+    box.innerHTML = "";
+    box.appendChild(t);
+  }
+
+  (async function init(){
+    if(!location.hash) setRoute("home");
+    await refreshMe();
+    renderRoute();
+  })();
+</script>
+</body>
+</html>
